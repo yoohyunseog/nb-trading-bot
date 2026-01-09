@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>8BIT Flow Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="./css/flow-dashboard.css?v=v0.0.2" rel="stylesheet">
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- Chart.js for summary and mini charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- External N/B calculation library (same as index.html) -->
+  <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.v.0.2.js"></script>
+</head>
+<body>
+  <div class="container-main">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-title">🔄 Flow Dashboard</div>
+      <div class="live-indicator">
+        <div class="live-dot"></div>
+        <span id="systemStatus">N/B START...</span>
+        <div class="progress-steps" id="progressSteps">
+          <span class="step-num" data-step="1">1</span>
+          <span class="step-num" data-step="2">2</span>
+          <span class="step-num" data-step="3">3</span>
+          <span class="step-num" data-step="4">4</span>
+          <span class="step-num" data-step="5">5</span>
+          <span class="step-num" data-step="6">6</span>
+          <span class="step-num" data-step="7">7</span>
+          <span class="step-num" data-step="8">8</span>
+          <span class="step-num" data-step="9">9</span>
+          <span class="step-num" data-step="10">10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Market Analysis -->
+    <div class="step1-container">
+      <div class="step1-title">1단계 분봉 선택</div>
+
+      <!-- Timeframe Selection -->
+      <div class="timeframe-section">
+        <div class="section-label">📊 분봉 선택</div>
+        <div class="timeframe-buttons">
+          <button class="timeframe-btn active" data-interval="minute1" onclick="selectTimeframe('minute1')">1분</button>
+          <button class="timeframe-btn" data-interval="minute3" onclick="selectTimeframe('minute3')">3분</button>
+          <button class="timeframe-btn" data-interval="minute5" onclick="selectTimeframe('minute5')">5분</button>
+          <button class="timeframe-btn" data-interval="minute10" onclick="selectTimeframe('minute10')">10분</button>
+          <button class="timeframe-btn" data-interval="minute15" onclick="selectTimeframe('minute15')">15분</button>
+          <button class="timeframe-btn" data-interval="minute30" onclick="selectTimeframe('minute30')">30분</button>
+          <button class="timeframe-btn" data-interval="minute60" onclick="selectTimeframe('minute60')">1시간</button>
+          <button class="timeframe-btn" data-interval="day" onclick="selectTimeframe('day')">일봉</button>
+        </div>
+      </div>
+
+      <!-- Trust Section -->
+      <div class="trust-section">
+        <!-- ML Model Trust -->
+        <div class="trust-box">
+          <div class="trust-label">
+            <span class="trust-icon">🤖</span>
+            ML Model Trust
+          </div>
+          <div class="trust-value" id="mlTrust">0%</div>
+        </div>
+
+        <!-- N/B Guild Trust -->
+        <div class="trust-box">
+          <div class="trust-label">
+            <span class="trust-icon">🏛️</span>
+            N/B Guild Trust
+          </div>
+          <div class="trust-value nb" id="nbTrust">0%</div>
+        </div>
+      </div>
+
+      <!-- N/B Zone Status -->
+      <div class="zone-section">
+        <div class="section-label">🎯 N/B Zone Status</div>
+        
+        <div class="zone-info">
+          <div class="zone-item">
+            <div class="zone-item-label">Timeframe</div>
+            <div class="zone-item-value" id="currentTimeframe">-</div>
+          </div>
+          <div class="zone-item">
+            <div class="zone-item-label">Current Zone</div>
+            <div class="zone-item-value">
+              <span class="zone-badge" id="currentZone">-</span>
+            </div>
+          </div>
+          <div class="zone-item">
+            <div class="zone-item-label">Zone Count</div>
+            <div class="zone-item-value" id="zoneCount">0</div>
+          </div>
+        </div>
+
+        <!-- Zone Chart Visualization -->
+        <div class="zone-chart-label">Visible chart zones (left=older → right=newer)</div>
+        <div class="zone-chart" id="zoneChart">
+          <!-- Chart segments will be rendered here -->
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- Step 2: Analysis & Card Generation -->
+    <div class="step2-container" id="step2Section">
+      <div class="step2-title">2단계: win%, 그래프 분석 및 카드 생성</div>
+      
+      <div class="row g-3">
+        <!-- Left: Win Rate Card (index.html 스타일) -->
+        <div class="col-lg-3">
+          <div class="win-rate-box" style="background:linear-gradient(180deg, rgba(255,183,3,0.10), rgba(14,20,36,0.85)); box-shadow:0 10px 30px rgba(0,0,0,0.35);">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <strong class="text-white">Win%</strong>
+                <div style="font-size:11px; color:#d9e2f3;">로컬 스냅샷 + 서버 히스토리</div>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Zone filter" style="border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden;">
+                  <button type="button" id="winZoneAll" class="btn btn-dark">ALL</button>
+                  <button type="button" id="winZoneBlue" class="btn btn-primary">BLUE</button>
+                  <button type="button" id="winZoneOrange" class="btn btn-warning">ORANGE</button>
+                </div>
+                <span id="winMajor" class="badge bg-white text-dark">-</span>
+              </div>
+            </div>
+            
+            <!-- Zone Status Section -->
+            <div class="win-zone-section mb-3" style="background:rgba(0,0,0,0.25); border-radius:10px; padding:10px;">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="zone-display-label">25개 히스토리</span>
+                <div class="d-flex align-items-center gap-2" style="font-size:11px; color:#d9e2f3;">
+                  <span id="winLocalCount" class="badge bg-dark text-white">0</span>
+                  <span id="winServerCount" class="badge bg-secondary text-white">0</span>
+                </div>
+              </div>
+              <div id="zoneConsistencyInfo" class="zone-consistency-display">
+                <div class="zone-consistency-content">
+                  🔄 <span class="sync-status">실시간 동기화</span> | 
+                  N/B: <span id="nbZoneDisplay">-</span> | 
+                  ML: <span id="mlZoneDisplay">-</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div id="winFillTrack" class="win-progress-track mb-3" style="height:10px; border-radius:12px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); overflow:hidden;">
+              <div id="winFillBar" class="win-progress-bar" style="height:100%; width:1%; background:#ffffff; transition:width .4s ease"></div>
+            </div>
+
+            <!-- 카드 등급 표시 -->
+            <div class="d-flex justify-content-between align-items-center mb-2" style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px;">
+              <div>
+                <div style="font-size:10px; color:#9aa8c2;">카드 등급</div>
+                <div id="winCardGrade" style="font-size:14px; font-weight:700; color:#ffd700;">-</div>
+              </div>
+              <div class="text-end">
+                <div id="winCardLeague" style="font-size:11px; color:#d9e2f3;">-</div>
+                <div id="winCardMlGrade" style="font-size:10px; color:#9aa8c2;">&nbsp;</div>
+              </div>
+            </div>
+
+            <!-- 카드 등급 추이 그래프 -->
+            <div style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px; margin-bottom:10px;">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="zone-display-label">카드 등급 추이</div>
+                <span id="winGradeTrendLabel" class="badge bg-dark text-white">-</span>
+              </div>
+              <div style="height:110px;">
+                <canvas id="winGradeTrendChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Win History List -->
+            <div id="winList" class="win-history-list flex-grow-1" style="gap:8px; overflow-y:auto; overflow-x:hidden;"></div>
+          </div>
+        </div>
+        
+        <!-- Center: Graph -->
+        <div class="col-lg-6">
+          <div class="graph-container" id="step2Graph">
+            <!-- LightweightCharts will be rendered here -->
+          </div>
+        </div>
+        
+        <!-- Right: Current Card (현재 카드) -->
+        <div class="col-lg-3">
+          <div class="card-generation-box" style="background: linear-gradient(135deg, rgba(30,35,41,0.9), rgba(14,20,36,0.9)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <!-- 헤더 -->
+            <div class="d-flex justify-content-between align-items-center mb-1" style="border-bottom: 2px solid rgba(0,209,255,0.3); padding-bottom: 8px;">
+              <div>
+                <strong class="text-white" style="font-size: 16px;">📊 현재 카드</strong>
+                <div style="font-size: 10px; margin-top: 6px;">
+                  <div class="text-muted" id="ccTimestamp">-</div>
+                  <div style="color: #00d1ff; font-weight: 600; margin-top: 3px;">분봉: <span id="ccTimeframeDisplay">10m</span></div>
+                </div>
+              </div>
+              <span id="ccInterval" class="badge bg-info" style="font-size: 10px; padding: 4px 8px;">-</span>
+            </div>
+
+            <!-- 카드 등급 -->
+            <div id="ccRatingSection" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; border: 1px solid rgba(255,255,255,0.2);">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">카드 등급</div>
+                  <div id="ccRatingDisplay" style="font-size: 16px; font-weight: 700;">-</div>
+                </div>
+                <div class="text-end">
+                  <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">점수</div>
+                  <div id="ccRatingScore" style="font-size: 14px; font-weight: 600; color: #00d1ff;">-</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 현재 가격 -->
+            <div style="background: rgba(0,209,255,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(0,209,255,0.3);">
+              <div class="zone-display-label" style="margin-bottom: 4px;">현재 가격</div>
+              <div id="ccPrice" style="font-size: 18px; font-weight: 700; color: #00d1ff; word-break: break-all;">-</div>
+              <div id="ccCurrentPrice" style="display:none;">-</div>
+            </div>
+
+            <!-- 거래량 & 거래대금 -->
+            <div class="row g-2">
+              <div class="col-6">
+                <div style="background: rgba(14,203,129,0.1); border-radius: 6px; padding: 8px; border: 1px solid rgba(14,203,129,0.3);">
+                  <div class="zone-display-label" style="font-size: 9px; margin-bottom: 2px;">거래량</div>
+                  <div id="ccVolume" style="font-size: 12px; font-weight: 700; color: #0ecb81; word-break: break-all;">-</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div style="background: rgba(66,133,244,0.1); border-radius: 6px; padding: 8px; border: 1px solid rgba(66,133,244,0.3);">
+                  <div class="zone-display-label" style="font-size: 9px; margin-bottom: 2px;">거래대금</div>
+                  <div id="ccTurnover" style="font-size: 12px; font-weight: 700; color: #4285f4; word-break: break-all;">-</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 가격/거래량/거래대금 N/B -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 가격</div>
+                <div class="d-flex justify-content-between mb-1"><span class="text-muted" style="font-size: 10px;">MAX</span><span id="ccPriceMax" style="font-size: 11px; font-weight: 600; color: #0ecb81;">-</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted" style="font-size: 10px;">MIN</span><span id="ccPriceMin" style="font-size: 11px; font-weight: 600; color: #f6465d;">-</span></div>
+              </div>
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📈 거래량</div>
+                <div class="d-flex justify-content-between mb-1"><span class="text-muted" style="font-size: 10px;">MAX</span><span id="ccVolMax" style="font-size: 11px; font-weight: 600; color: #2bdab5;">-</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted" style="font-size: 10px;">MIN</span><span id="ccVolMin" style="font-size: 11px; font-weight: 600; color: #ffb703;">-</span></div>
+              </div>
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💵 거래대금</div>
+                <div class="d-flex justify-content-between mb-1"><span class="text-muted" style="font-size: 10px;">MAX</span><span id="ccTurnMax" style="font-size: 11px; font-weight: 600; color: #4285f4;">-</span></div>
+                <div class="d-flex justify-content-between"><span class="text-muted" style="font-size: 10px;">MIN</span><span id="ccTurnMin" style="font-size: 11px; font-weight: 600; color: #9c27b0;">-</span></div>
+              </div>
+            </div>
+
+            <!-- Mini Zone Chart -->
+            <div style="background: rgba(14,20,36,0.8); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 N/B WAVE</div>
+              <div id="ccMiniZoneChart" style="display: flex; gap: 1px; height: 24px; border-radius: 4px; overflow: hidden;"></div>
+            </div>
+
+            <!-- 요약 그래프 -->
+            <div style="position: relative; height: 92px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff;">📊 추이 그래프</div>
+                <div id="ccSummaryLastPrice" style="font-size: 11px; font-weight: 700; color: #00d1ff; background: rgba(0,209,255,0.12); border: 1px solid rgba(0,209,255,0.35); padding: 2px 8px; border-radius: 999px;">-</div>
+              </div>
+              <canvas id="ccSummaryChart" style="position: absolute; top: 28px; left: 0; width: 100%; height: 64px !important;"></canvas>
+            </div>
+
+            <!-- N/B WAVE STATUS -->
+            <div style="background: rgba(14,20,36,0.8); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-around; align-items: center;">
+              <div style="text-align: center; flex: 1;">
+                <div style="font-size: 10px; font-weight: 700; color: #00d1ff; margin-bottom: 4px;">🔵 BLUE</div>
+                <div id="ccWaveR" style="font-size: 13px; font-weight: 700; color: #00d1ff;">-</div>
+              </div>
+              <div style="width: 1px; height: 30px; background: rgba(255,255,255,0.1);"></div>
+              <div style="text-align: center; flex: 1;">
+                <div style="font-size: 10px; font-weight: 700; color: #ffb703; margin-bottom: 4px;">🟠 ORANGE</div>
+                <div id="ccWaveW" style="font-size: 13px; font-weight: 700; color: #ffb703;">-</div>
+              </div>
+              <div style="width: 1px; height: 30px; background: rgba(255,255,255,0.1);"></div>
+              <div style="text-align: center; flex: 1;">
+                <div style="font-size: 9px; font-weight: 600; color: #9aa8c2; margin-bottom: 4px;">상태</div>
+                <div id="ccWaveStatus" style="font-size: 11px; font-weight: 700; color: #2ecc71;">Normal</div>
+              </div>
+            </div>
+
+            <!-- N/B Zone & ML Trust -->
+            <div class="row g-2">
+              <div class="col-6">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🗺️ N/B Zone</div>
+                <div id="ccNBZone" style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">-</div>
+              </div>
+              <div class="col-6">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🤖 ML Trust</div>
+                <div id="ccMLTrust" style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">-</div>
+              </div>
+            </div>
+
+            <!-- 판매 실현 손익 -->
+            <div class="row g-2">
+              <div class="col-6">
+                <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 8px;">
+                  <div class="text-muted" style="font-size: 10px;">판매 평균 실현 손익</div>
+                  <div id="ccRealizedAvg" style="font-size: 13px; font-weight: 700;">0 KRW</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 8px;">
+                  <div class="text-muted" style="font-size: 10px;">판매 최고 실현 손익</div>
+                  <div id="ccRealizedMax" style="font-size: 13px; font-weight: 700;">0 KRW</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 버튼 및 상태 -->
+            <div class="mt-auto" style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="d-flex align-items-center gap-2">
+                <label class="text-muted" style="font-size: 11px; white-space: nowrap;">매수 금액</label>
+                <input id="ccBuyAmount" type="number" value="5000" min="1000" step="1000" class="form-control form-control-sm" style="flex: 1;" />
+              </div>
+              <div class="d-grid gap-2">
+                <button id="ccBuy" class="btn btn-sm btn-success">🛒 현재 카드 매수</button>
+                <button id="ccPaperBuy" class="btn btn-sm btn-warning">🧪 가상 매수</button>
+                <button id="ccRefresh" class="btn btn-sm btn-outline-info">🔄 새로고침</button>
+              </div>
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <button id="ccSave" class="btn btn-sm btn-primary w-100 mb-2">💾 NBverse 저장</button>
+                <div style="font-size: 11px; font-weight: 600; color: #2ecc71; text-align: center;">
+                  <span id="ccSaveHint">대기</span>
+                </div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px;">
+                <div style="text-align: center; flex: 1;">
+                  <div class="zone-display-label" style="font-size: 9px; margin-bottom: 2px;">BUY</div>
+                  <span id="buyCardCount" class="badge bg-success" style="font-size: 11px;">0</span>
+                </div>
+                <div style="text-align: center; flex: 1;">
+                  <div class="zone-display-label" style="font-size: 9px; margin-bottom: 2px;">SELL</div>
+                  <span id="sellCardCount" class="badge bg-danger" style="font-size: 11px;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 7: 자산 조회 -->
+    <div class="step7-container">
+      <div class="step7-title">3단계: 자산 조회</div>
+      
+      <!-- 자산 요약 -->
+      <div class="card border-secondary rounded-3 p-3 mb-3" style="background: rgba(14,20,36,0.6);">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <strong class="text-white">📊 자산</strong>
+            <span id="assetsMeta" class="text-muted" style="font-size:11px">-</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <button id="assetsRefresh" class="btn btn-sm btn-outline-info" onclick="loadAssets7()">🔄 새로고침</button>
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-md-4">
+            <div class="asset-stat">
+              <div class="label">총 자산 (KRW)</div>
+              <div class="value" id="assetTotal">-</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="asset-stat">
+              <div class="label">사용 가능 KRW</div>
+              <div class="value" id="assetBuyable">-</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="asset-stat">
+              <div class="label">BTC 보유 자산</div>
+              <div class="value">
+                <div id="assetBtcAmount">-</div>
+                <div id="assetBtcValue" style="font-size: 11px; color: #9aa8c2;">-</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="asset-bars" id="assetsBars"></div>
+      </div>
+
+      
+      <!-- Step 8, 9: 매수/매도 완료 카드 (좌우 배치) -->
+      <div class="row g-3 mb-4">
+        <!-- Step 8: 매수 완료 카드 -->
+        <div class="col-12 col-lg-6">
+          <div class="step8-container">
+            <div class="card border-success rounded-3 p-3" style="background: linear-gradient(135deg, rgba(14,203,129,0.1), rgba(14,203,129,0.05)); min-height: 500px;">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h5 class="m-0" style="color: #0ecb81;">🛒 매수 완료 카드</h5>
+                  <small class="text-muted" id="buyStatsTime">-</small>
+                </div>
+                <span id="buyCount" class="badge bg-success" style="font-size: 16px;">0</span>
+              </div>
+              
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px; max-height: auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(0, 209, 255, 0.4) rgba(14, 20, 36, 0.5);">
+                <div id="buyOrderList" style="font-size: 12px; color: #e6eefc;">
+                  <div class="text-center text-muted py-2">매수 내역이 없습니다</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 9: 매도 완료 카드 -->
+        <div class="col-12 col-lg-6">
+          <div class="step9-container">
+            <div class="card border-danger rounded-3 p-3" style="background: linear-gradient(135deg, rgba(246,70,93,0.1), rgba(246,70,93,0.05)); min-height: 500px;">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h5 class="m-0" style="color: #f6465d;">💰 매도 완료</h5>
+                  <small class="text-muted" id="sellStatsTime">-</small>
+                </div>
+                <span id="sellCount" class="badge bg-danger" style="font-size: 16px;">0</span>
+              </div>
+              
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">총 매도 금액</div>
+                    <div id="sellTotalAmount" style="font-size: 14px; font-weight: 700; color: #f6465d;">0 KRW</div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">평균 매도가</div>
+                    <div id="sellAvgPrice" style="font-size: 14px; font-weight: 700; color: #f6465d;">0 KRW</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">총 수익</div>
+                    <div id="totalProfit" style="font-size: 14px; font-weight: 700;">0 KRW</div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">수익률</div>
+                    <div id="profitRate" style="font-size: 14px; font-weight: 700;">0%</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px; max-height: 300px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(0, 209, 255, 0.4) rgba(14, 20, 36, 0.5);">
+                <div class="text-muted mb-2" style="font-size: 11px;">최근 매도 내역</div>
+                <div id="sellOrderList" style="font-size: 12px; color: #e6eefc;">
+                  <div class="text-center text-muted py-2">매도 내역이 없습니다</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="./js/flow-dashboard.js?v=v0.0.2"></script>
+</body>
+</html>

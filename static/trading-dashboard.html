@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>8BIT Upbit Bot UI</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body{ overflow-anchor: none; }
+    body{background:#0b1220;color:#ffffff;font-family:-apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;font-size:14px}
+    .card{background:#1e2329;border:1px solid rgba(255,255,255,0.08)}
+    #tvChart{width:80%;height:82vh;min-height:460px}
+    .kv{display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px dashed rgba(255,255,255,0.08)}
+    .buy{color:#0ecb81}.sell{color:#f6465d}
+    @media (max-width: 991px){ #tvChart{height:70vh} }
+    .toolbar .form-control,.toolbar .form-select{color:#ffffff;background:#2b3139;border:1px solid rgba(255,255,255,0.2)}
+    .toolbar .btn{color:#ffffff}
+    .form-check-label{color:#e0e7ff}
+    .kv span:first-child{color:#ffffff}
+    .kv span:last-child{color:#ffffff;font-weight:700}
+    .badge{color:#ffffff}
+    .text-muted{color:#ffffff !important}
+    /* Assets UI */
+    .asset-stat{background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px}
+    .asset-stat .label{color:#ffffff;font-size:12px}
+    .asset-stat .value{color:#ffffff;font-size:20px;font-weight:700}
+    .asset-bars{display:flex;flex-direction:column;gap:8px}
+    .asset-bar .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    .asset-bar .label{color:#ffffff;font-weight:600}
+    .asset-bar .muted{color:#ffffff;font-size:12px;margin-left:8px}
+    .asset-bar .meter{height:10px;border-radius:6px;background:#10182a;overflow:hidden;border:1px solid rgba(255,255,255,0.08)}
+    .asset-bar .fill{height:100%;background:linear-gradient(90deg,#0ecb81,#2bdab5)}
+    .asset-bar.krw .fill{background:linear-gradient(90deg,#4285f4,#72a6ff)}
+    .chip{display:inline-block;padding:3px 8px;margin:2px;border-radius:999px;background:#2b3139;border:1px solid rgba(255,255,255,0.12);font-size:12px;color:#ffffff}
+    /* Win list */
+    #winList{display:flex;flex-direction:column;gap:6px;overflow-y:auto;overflow-x:hidden}
+    #winList{scrollbar-width:none;-ms-overflow-style:none}
+    #winList::-webkit-scrollbar{width:0;height:0}
+    /* Win card scroll hide scrollbar */
+    #winCard{scrollbar-width:none;-ms-overflow-style:none}
+    #winCard::-webkit-scrollbar{width:0;height:0}
+    .win-chip{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;color:#ffffff;background:#1b2437;transition:transform .2s ease, box-shadow .2s ease;min-height:32px}
+    .win-chip.positive{background:linear-gradient(90deg,rgba(14,203,129,0.35),rgba(14,203,129,0.10));}
+    .win-chip.negative{background:linear-gradient(90deg,rgba(246,70,93,0.35),rgba(246,70,93,0.10));}
+    .win-chip:hover{transform:translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.35)}
+    .win-chip .meta{font-size:11px;color:#d9e2f3;line-height:1.3;text-align:left}
+    .win-chip .val{font-weight:700;white-space:normal;word-break:break-word;flex:1}
+    /* Zone badge on win buttons */
+    .zone-badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:11px;font-weight:700;color:#0b1220}
+    .zone-blue{background:#00d1ff;color:#0b1220}
+    .zone-orange{background:#ffb703;color:#0b1220}
+    
+    /* Zone display improvements */
+    .zone-display-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .zone-display-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    
+    .zone-display-label {
+      font-size: 10px;
+      color: #888888;
+      font-weight: 500;
+    }
+    
+    .zone-display-badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    
+    .zone-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .zone-stats {
+      font-size: 11px;
+      color: #ffffff;
+      font-weight: 500;
+    }
+    
+    /* 분봉 카드 스타일 */
+    .timeframe-cards-container {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 5px 0;
+    }
+    
+    .timeframe-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+      min-width: 80px;
+      background: rgba(52, 73, 94, 0.8);
+      border: 1px solid #34495e;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .timeframe-card:hover {
+      background: rgba(52, 152, 219, 0.3);
+      border-color: #3498db;
+      transform: translateY(-2px);
+    }
+    
+    .timeframe-card.active {
+      background: rgba(52, 152, 219, 0.5);
+      border-color: #3498db;
+      box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+    }
+    
+    .timeframe-icon {
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+    
+    .timeframe-name {
+      font-weight: bold;
+      color: #ecf0f1;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+    
+    .timeframe-status {
+      font-size: 10px;
+      color: #2ecc71;
+      font-weight: 500;
+    }
+    
+         .timeframe-card:not(.active) .timeframe-status {
+       color: #95a5a6;
+     }
+     
+           /* 하단 분봉 카드 스타일 */
+      .timeframe-cards-container-bottom {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 5px 0;
+        justify-content: center;
+        min-height: 80px;
+      }
+      
+      .timeframe-card-bottom {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px;
+        min-width: 70px;
+        background: rgba(52, 73, 94, 0.8);
+        border: 1px solid #34495e;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        flex-shrink: 0;
+        height: 60px;
+        justify-content: center;
+      }
+      
+      .timeframe-card-bottom:hover {
+        background: rgba(52, 152, 219, 0.3);
+        border-color: #3498db;
+        transform: translateY(-2px);
+      }
+      
+      .timeframe-card-bottom.active {
+        background: rgba(52, 152, 219, 0.5);
+        border-color: #3498db;
+        box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+      }
+      
+      .timeframe-icon-bottom {
+        font-size: 16px;
+        margin-bottom: 3px;
+        color: #ecf0f1;
+      }
+      
+      .timeframe-name-bottom {
+        font-weight: bold;
+        color: #ecf0f1;
+        font-size: 12px;
+        margin-bottom: 2px;
+      }
+      
+      .timeframe-status-bottom {
+        font-size: 9px;
+        color: #2ecc71;
+        font-weight: 500;
+      }
+      
+      .timeframe-card-bottom:not(.active) .timeframe-status-bottom {
+        color: #95a5a6;
+      }
+    /* Win card zone theming */
+    .win-card-blue{background:linear-gradient(180deg,rgba(0,209,255,0.12),rgba(0,209,255,0.04)) !important}
+    .win-card-orange{background:linear-gradient(180deg,rgba(255,183,3,0.12),rgba(255,183,3,0.04)) !important}
+    /* PnL slider glow */
+    @keyframes glowGreen { 0%{ box-shadow:0 0 0 rgba(14,203,129,0);} 50%{ box-shadow:0 0 12px rgba(14,203,129,0.8);} 100%{ box-shadow:0 0 0 rgba(14,203,129,0);} }
+    @keyframes glowRed { 0%{ box-shadow:0 0 0 rgba(246,70,93,0);} 50%{ box-shadow:0 0 12px rgba(246,70,93,0.8);} 100%{ box-shadow:0 0 0 rgba(246,70,93,0);} }
+    .glow-green{ animation: glowGreen .9s ease; }
+    .glow-red{ animation: glowRed .9s ease; }
+    #pnlLeftLabel,#pnlRightLabel{ color:#ffffff }
+    /* Masonry cards animation */
+    .nb-coin-item{ transition: transform .3s ease, width .3s ease, height .3s ease, opacity .3s ease; will-change: transform; }
+    /* Speech bubble */
+    .nb-bubble{ position:relative; background:#1b2437; border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:8px 10px; color:#ffffff; font-size:12px }
+    .nb-bubble:after{ content:""; position:absolute; bottom:-6px; left:18px; border-width:6px 6px 0 6px; border-style:solid; border-color:rgba(255,255,255,0.15) transparent transparent transparent }
+    .nb-bubble:before{ content:""; position:absolute; bottom:-5px; left:19px; border-width:5px 5px 0 5px; border-style:solid; border-color:#1b2437 transparent transparent transparent }
+    
+    /* Auto Trading Status Styles */
+    .auto-trading-status {
+      background: #0e1424;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .auto-trading-status h4 {
+      color: #ffffff;
+      font-size: 14px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    
+    .member-auto-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+    }
+    
+    .member-auto-status:last-child {
+      border-bottom: none;
+    }
+    
+    .member-auto-status span {
+      color: #ffffff;
+    }
+    
+    .member-auto-status span:first-child {
+      font-weight: 600;
+      flex: 1;
+    }
+    
+    .member-auto-status span:nth-child(2) {
+      margin: 0 12px;
+      font-size: 11px;
+    }
+    
+    .member-auto-status span:last-child {
+      font-size: 11px;
+      color: #d9e2f3;
+    }
+    
+    /* 자동화 모드 표시 (선택적) */
+    .auto-mode-indicator {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(14, 203, 129, 0.2);
+      border: 1px solid #0ecb81;
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #0ecb81;
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 10000;
+      backdrop-filter: blur(10px);
+      display: none; /* 필요시 표시 */
+    }
+    
+    /* 분봉 순회 프로그레스바 스타일 */
+    #timeframeCycleProgress {
+      box-shadow: 0 0 10px rgba(0, 209, 255, 0.3);
+      animation: progressGlow 2s ease-in-out infinite;
+    }
+    
+    @keyframes progressGlow {
+      0%, 100% { box-shadow: 0 0 10px rgba(0, 209, 255, 0.3); }
+      50% { box-shadow: 0 0 20px rgba(0, 209, 255, 0.6); }
+    }
+    
+    #timeframeCycleProgress[style*="width: 100%"] {
+      animation: progressComplete 0.5s ease-in-out;
+    }
+    
+    @keyframes progressComplete {
+      0% { background: linear-gradient(90deg, #00d1ff, #4285f4); }
+      50% { background: linear-gradient(90deg, #0ecb81, #2bdab5); }
+      100% { background: linear-gradient(90deg, #00d1ff, #4285f4); }
+    }
+  </style>
+</head>
+<body class="text-white">
+  <div class="container-xxl py-3">
+    <!-- Global Profit/Loss slider (uses Win% from backtest) -->
+    <div class="card border-secondary rounded-3 p-2 mb-3">
+      <div class="pnl-track" style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:10px; overflow:hidden; position:relative">
+        <div id="pnlCenter" style="position:absolute; left:50%; top:0; width:2px; height:100%; background:#ffffff"></div>
+        <div id="pnlLeftBar" style="position:absolute; right:50%; top:0; height:100%; width:0%; background:linear-gradient(90deg, rgba(14,203,129,0.9), rgba(14,203,129,0.45)); transition:width .6s ease"></div>
+        <div id="pnlRightBar" style="position:absolute; left:50%; top:0; height:100%; width:0%; background:linear-gradient(90deg, rgba(246,70,93,0.45), rgba(246,70,93,0.9)); transition:width .6s ease"></div>
+      </div>
+      <div class="d-flex justify-content-between mt-1" style="font-size:12px">
+        <div id="pnlLeftLabel">Profit 0%</div>
+        <div id="pnlRightLabel">Loss 100%</div>
+      </div>
+      <div class="mt-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted" style="font-size:12px">AutoTrade Readiness</span>
+          <span id="autoGaugeText" class="badge bg-secondary">-</span>
+        </div>
+        <div style="height:8px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden;">
+          <div id="autoGaugeBar" style="height:100%; width:0%; background:linear-gradient(90deg,#2bdab5,#0ecb81); transition:width .4s ease"></div>
+        </div>
+      </div>
+      
+      <!-- Information Trust Sliders -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted" style="font-size:12px">Information Trust Level</span>
+          <span id="trustStatusText" class="badge bg-info">Balanced</span>
+        </div>
+        
+        <!-- ML Model Trust Slider -->
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="text-muted" style="font-size:11px">🤖 ML Model Trust</span>
+            <span id="mlTrustValue" class="badge bg-primary" style="font-size:10px">50%</span>
+          </div>
+          <div style="height:6px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:4px; overflow:hidden; position:relative;">
+            <div id="mlTrustBar" style="height:100%; width:50%; background:linear-gradient(90deg,#4285f4,#72a6ff); transition:width .3s ease"></div>
+            <input type="range" id="mlTrustSlider" min="0" max="100" value="50" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+          </div>
+        </div>
+        
+        <!-- N/B Guild Trust Slider -->
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="text-muted" style="font-size:11px">🏛️ N/B Guild Trust</span>
+            <span id="nbTrustValue" class="badge bg-warning" style="font-size:10px">50%</span>
+          </div>
+          <div style="height:6px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:4px; overflow:hidden; position:relative;">
+            <div id="nbTrustBar" style="height:100%; width:50%; background:linear-gradient(90deg,#ffb703,#ffd54f); transition:width .3s ease"></div>
+            <input type="range" id="nbTrustSlider" min="0" max="100" value="50" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+          </div>
+        </div>
+        
+        <!-- Trust Balance Indicator -->
+        <div class="mt-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted" style="font-size:10px">Trust Balance</span>
+            <span id="trustBalanceText" class="text-muted" style="font-size:10px">ML: 50% | N/B: 50%</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 분봉 순회 프로그레스바 -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:12px">분봉 자동 순회</span>
+            <span id="timeframeCycleStatus" class="badge bg-success" style="font-size:10px">활성</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span id="currentTimeframeDisplay" class="badge bg-primary" style="font-size:11px">10m</span>
+            <span id="nextTimeframeDisplay" class="text-muted" style="font-size:11px">→ 15m</span>
+          </div>
+        </div>
+        <div style="height:16px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:8px; overflow:hidden; position:relative">
+          <div id="timeframeCycleProgress" style="height:100%; width:0%; background:linear-gradient(90deg, #00d1ff, #4285f4); transition:width 0.1s linear; position:relative">
+            <div style="position:absolute; right:0; top:0; bottom:0; width:2px; background:#ffffff; opacity:0.5"></div>
+          </div>
+          <div id="timeframeCycleText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:11px; font-weight:600; color:#ffffff; text-shadow:0 0 4px rgba(0,0,0,0.8); pointer-events:none">
+            <span id="timeframeCyclePercent">0%</span>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between mt-1" style="font-size:10px">
+          <span class="text-muted">순회 시간: <span id="timeframeCycleDuration">30</span>초</span>
+          <button id="toggleTimeframeCycle" class="btn btn-sm btn-outline-secondary" style="padding:2px 8px; font-size:10px">일시정지</button>
+        </div>
+      </div>
+      
+      <!-- N/B Zone Strip -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:12px">N/B Zone Status</span>
+            <span id="nbZoneTimeframe" class="badge bg-info" style="font-size:10px">-</span>
+          </div>
+          <span id="nbZoneNow" class="badge bg-secondary">-</span>
+        </div>
+        <div id="nbZoneStrip" style="height:12px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; display:flex; align-items:center; padding:2px">
+          <div class="text-muted" style="font-size:11px; padding-left:6px">Loading…</div>
+        </div>
+                      <div class="text-white" style="font-size:11px; margin-top:4px">Visible chart zones (left=older → right=newer)</div>
+      </div>
+      
+      <!-- Integrated Guild Members & Auto Trading -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <strong class="text-white" style="font-size:12px">🏰 Guild Members</strong>
+        </div>
+        <div id="integratedGuildStatus" class="mt-1" style="font-size:12px; color:#ffffff; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:8px; min-height:22px">
+          <div class="text-muted" style="font-size:11px">Guild 시스템 초기화 중...</div>
+        </div>
+      </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="m-0">8BIT Upbit Bot - Chart</h3>
+      <div class="d-flex align-items-center gap-3">
+        <!-- Wave Counter -->
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-primary" style="font-size: 10px;">Blue Wave</span>
+            <span id="blueWaveCount" class="badge bg-info" style="font-size: 10px;">5</span>
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-warning" style="font-size: 10px;">Orange Wave</span>
+            <span id="orangeWaveCount" class="badge bg-info" style="font-size: 10px;">3</span>
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-secondary" style="font-size: 10px;">Last</span>
+            <span id="lastWaveType" class="badge bg-primary" style="font-size: 10px;">BLUE</span>
+          </div>
+        </div>
+        <div class="text-muted" id="meta">-</div>
+      </div>
+    </div>
+
+    <!-- Top Status + Layout switch: chart left, assets right -->
+    <div class="row g-3 align-items-stretch mb-3">
+      <div class="col-12 col-lg-2">
+        <div id="winCard" class="card border-secondary rounded-3 p-3 h-100 d-flex flex-column win-card-orange" style="overflow-y:auto; scrollbar-width:none; max-height:920px;">
+          <div class="mb-2">
+            <strong class="text-white">Win%</strong>
+          </div>
+          
+          <!-- Zone display - col-12 layout -->
+          <div class="row g-2 mb-3">
+            <div class="col-12">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="zone-display-label">25개 히스토리</span>
+                <span id="winMajor" class="badge bg-white text-dark zone-display-badge">-</span>
+              </div>
+            </div>
+            <div class="col-12">
+              <div id="zoneConsistencyInfo" style="font-size: 10px; color: #888;">
+                <!-- Zone consistency info will be displayed here -->
+              </div>
+            </div>
+          </div>
+          <div id="winFillTrack" style="height:6px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; margin-bottom:8px;">
+            <div id="winFillBar" style="height:100%; width:1%; background:#ffffff; transition:width .4s ease"></div>
+          </div>
+          <div id="winList" class="flex-grow-1" style="overflow-y:auto;overflow-x:hidden;"></div>
+        </div>
+      </div>
+             <div class="col-12 col-lg-8">
+         <div class="card border-secondary rounded-3 h-100">
+           <div class="card-body">
+             <div id="tvChart" class="mt-2" style="width: 80%; margin: 0 auto;"></div>
+            <div class="mt-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="text-white">Model Narrative (EN)</strong>
+                <span id="nbNarrativeBadge" class="badge bg-secondary">-</span>
+              </div>
+              <div id="nbNarrative" style="font-size:13px; color:#e6eefc; background:#0e1424; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:10px; min-height:52px">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 justify-content-center">
+      <div class="col-12 mt-3">
+        <!-- 분봉 선택 카드 (기존 하단 카드 이동) -->
+        <div class="card border-secondary rounded-3 p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <strong class="text-white">분봉 선택</strong>
+            <div class="d-flex align-items-center gap-2">
+              <button id="btnAutoRotateBottom" class="btn btn-sm btn-outline-info">자동 순회</button>
+              <span id="currentTimeframeBottom" class="badge bg-primary">10m</span>
+            </div>
+          </div>
+          <div class="timeframe-cards-container-bottom">
+            <div class="timeframe-card-bottom" data-timeframe="minute1">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute3">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">3m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute5">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">5m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom active" data-timeframe="minute10">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">10m</div>
+              <div class="timeframe-status-bottom">활성</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute15">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">15m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute30">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">30m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute60">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1h</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="day">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1D</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-secondary rounded-3 p-3">
+          <div class="row g-2 align-items-center mb-3 toolbar">
+            <div class="col-auto">
+              <select id="timeframe" class="form-select form-select-sm">
+                <option value="minute1">1m</option>
+                <option value="minute3">3m</option>
+                <option value="minute5">5m</option>
+                <option value="minute10" selected>10m</option>
+                <option value="minute15">15m</option>
+                <option value="minute30">30m</option>
+                <option value="minute60">1h</option>
+                <option value="day">1D</option>
+              </select>
+            </div>
+            <div class="col-auto"><button id="botStart" class="btn btn-primary btn-sm">Start Bot</button></div>
+            <div class="col-auto"><button id="botStop" class="btn btn-outline-light btn-sm">Stop Bot</button></div>
+            <div class="col-auto"><button id="btnShot" class="btn btn-secondary btn-sm">Screenshot</button></div>
+            <div class="col-auto"><button id="btnBacktest" class="btn btn-outline-info btn-sm">Backtest</button></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="autoBtToggle">
+              <label class="form-check-label text-muted" for="autoBtToggle">Auto BT</label>
+            </div>
+            <div class="col-auto text-muted">sec</div>
+            <div class="col-auto"><input id="autoBtSec" type="number" value="60" min="10" step="10" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnOptimize" class="btn btn-success btn-sm">Auto-Tune NB</button></div>
+            <div class="col-auto"><button id="btnTrain" class="btn btn-warning btn-sm">Train (Auto Period)</button></div>
+            <div class="col-auto text-muted">Cnt</div>
+            <div class="col-auto"><input id="trainCount" type="number" value="1800" min="300" step="300" class="form-control form-control-sm" style="width:90px" /></div>
+            <div class="col-auto text-muted">Seg</div>
+            <div class="col-auto"><input id="trainSeg" type="number" value="3" min="2" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnMlTrain" class="btn btn-danger btn-sm">ML Train</button></div>
+            <div class="col-auto"><button id="btnMlPredict" class="btn btn-outline-danger btn-sm">ML Predict</button></div>
+            <div class="col-12 col-lg-4">
+              <div class="card border-secondary rounded-3 p-2" style="min-height:80px">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <strong class="text-white">Model Insight</strong>
+                  <span id="miZone" class="badge bg-secondary">-</span>
+                </div>
+                <div id="miText" style="font-size:12px; color:#e6eefc">-</div>
+              </div>
+            </div>
+            <div class="col-auto"><button id="btnMlMetrics" class="btn btn-outline-warning btn-sm">ML Metrics</button></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="mlAuto">
+              <label class="form-check-label text-muted" for="mlAuto">ML Auto</label>
+            </div>
+            <div class="col-auto text-muted">N</div>
+            <div class="col-auto"><input id="mlRandN" type="number" value="12" min="1" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnMlRandom" class="btn btn-outline-warning btn-sm">ML Random</button></div>
+            <div class="col-auto"><button id="btnClearOrders" class="btn btn-outline-danger btn-sm">Clear Orders</button></div>
+            <div class="col-auto text-muted">NB Window</div>
+            <div class="col-auto"><input id="nbWindow" type="number" value="100" min="20" step="10" class="form-control form-control-sm" style="width:90px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="nbToggle" checked>
+              <label class="form-check-label text-muted" for="nbToggle">Show NB</label>
+            </div>
+            <div class="col-12"></div>
+            <div class="col-auto text-muted">BUY≥r</div>
+            <div class="col-auto"><input id="nbBuyTh" type="number" value="0.70" min="0.5" max="0.95" step="0.01" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">SELL≤r</div>
+            <div class="col-auto"><input id="nbSellTh" type="number" value="0.30" min="0.05" max="0.5" step="0.01" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">Pullback%</div>
+            <div class="col-auto"><input id="nbPullback" type="number" value="40" min="10" max="80" step="1" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">Debounce</div>
+            <div class="col-auto"><input id="nbDebounce" type="number" value="6" min="0" max="20" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">Forecast</div>
+            <div class="col-auto"><input id="fcWindow" type="number" value="50" min="10" step="5" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto"><input id="fcHorizon" type="number" value="30" min="1" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="fcToggle" checked>
+              <label class="form-check-label text-muted" for="fcToggle">Show</label>
+            </div>
+            
+            <div class="col-auto text-muted">Paper</div>
+            <div class="col-auto">
+              <select id="paperMode" class="form-select form-select-sm">
+                <option value="true" selected>true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+            <div class="col-auto text-muted">Order KRW</div>
+            <div class="col-auto"><input id="orderKrw" type="number" value="5000" min="1000" step="1000" class="form-control form-control-sm" style="width:110px" /></div>
+            <div class="col-auto text-muted">EMA</div>
+            <div class="col-auto"><input id="emaFast" type="number" value="10" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto">/</div>
+            <div class="col-auto"><input id="emaSlow" type="number" value="30" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="emaFilter" checked>
+              <label class="form-check-label text-muted" for="emaFilter">EMA Filter</label>
+            </div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="nbFromEma">
+              <label class="form-check-label text-muted" for="nbFromEma">NB from EMA</label>
+            </div>
+            <div class="col-auto text-muted">NB EMA</div>
+            <div class="col-auto"><input id="nbEmaPeriod" type="number" value="10" min="2" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-12"></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showSMA" checked>
+              <label class="form-check-label text-muted" for="showSMA">SMA</label>
+            </div>
+            <div class="col-auto text-muted">50</div>
+            <div class="col-auto"><input id="sma50" type="number" value="50" min="5" step="5" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">100</div>
+            <div class="col-auto"><input id="sma100" type="number" value="100" min="10" step="5" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">200</div>
+            <div class="col-auto"><input id="sma200" type="number" value="200" min="20" step="10" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showEMA9" checked>
+              <label class="form-check-label text-muted" for="showEMA9">EMA 9/12/26</label>
+            </div>
+            <div class="col-auto text-muted">Ichimoku</div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showIchimoku">
+              <label class="form-check-label text-muted" for="showIchimoku">Tenkan/Kijun</label>
+            </div>
+            <div class="col-auto text-muted">9</div>
+            <div class="col-auto"><input id="ichiTenkan" type="number" value="9" min="5" step="1" class="form-control form-control-sm" style="width:60px" /></div>
+            <div class="col-auto text-muted">26</div>
+            <div class="col-auto"><input id="ichiKijun" type="number" value="26" min="10" step="1" class="form-control form-control-sm" style="width:60px" /></div>
+          </div>
+          <hr class="text-secondary"/>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong class="text-white">Live Log</strong>
+            <div>
+              <button id="btnClearLog" class="btn btn-sm btn-outline-light me-2">Clear</button>
+              <div class="form-check form-switch d-inline-block">
+                <input class="form-check-input" type="checkbox" id="logAutoscroll">
+                <label class="form-check-label text-muted" for="logAutoscroll">Auto</label>
+              </div>
+            </div>
+          </div>
+          <pre id="logBox" style="height:160px;overflow:auto;overflow-anchor:none;background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;margin:0;color:#a7b4d7;font-size:12px;line-height:1.35"></pre>
+          <div id="mlMetricsBox" class="mt-2" style="font-size:12px;color:#e6eefc"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+     <!-- Orders Log Bottom Section -->
+   <div class="row g-3 justify-content-center mt-3">
+     <div class="col-12">
+       <div class="card border-secondary rounded-3 p-3">
+         <div class="d-flex justify-content-between align-items-center mb-2">
+           <strong class="text-white">Order Log</strong>
+           <div>
+             <button id="btnOrderExport" class="btn btn-sm btn-outline-light me-2">Export CSV</button>
+             <button id="btnOrderClear" class="btn btn-sm btn-outline-danger">Clear</button>
+           </div>
+         </div>
+         <div id="orderLog" style="height:180px;overflow:auto;overflow-anchor:none;background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;margin:0;color:#e6eefc;font-size:12px;line-height:1.35"></div>
+       </div>
+     </div>
+   </div>
+   </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"></script>
+  <script src="/static/mayor-guidance.js?v=dev"></script>
+  <script src="/static/village-trading-process.js?v=dev"></script>
+  <script src="/static/trainer-system.js?v=dev"></script>
+  <script src="/static/village-learning-system.js?v=dev"></script>
+  <script src="/static/guild-members-status.js?v=dev"></script>
+  <script src="/static/ui.js?v=dev"></script>
+  
+  <!-- 분봉 카드 기능 스크립트 -->
+  <script>
+    // 하단 분봉 카드 기능 (자동 순회 자동 시작)
+    document.addEventListener('DOMContentLoaded', function() {
+      const timeframeCardsBottom = document.querySelectorAll('.timeframe-card-bottom');
+      const timeframeSelect = document.getElementById('timeframe');
+      const currentTimeframeBadgeBottom = document.getElementById('currentTimeframeBottom');
+      const btnAutoRotateBottom = document.getElementById('btnAutoRotateBottom');
+      
+      let autoRotateIntervalBottom = null;
+      let currentTimeframeIndexBottom = 0; // 1m부터 시작
+      
+      // 하단 분봉 카드 클릭 이벤트
+      timeframeCardsBottom.forEach((card, index) => {
+        card.addEventListener('click', function() {
+          const timeframe = this.getAttribute('data-timeframe');
+          
+          // 활성 카드 변경
+          timeframeCardsBottom.forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+          
+          // 상태 텍스트 업데이트
+          timeframeCardsBottom.forEach(c => {
+            c.querySelector('.timeframe-status-bottom').textContent = '대기';
+          });
+          this.querySelector('.timeframe-status-bottom').textContent = '활성';
+          
+          // 셀렉트 박스 업데이트
+          timeframeSelect.value = timeframe;
+          
+          // 배지 업데이트
+          if (currentTimeframeBadgeBottom) {
+            currentTimeframeBadgeBottom.textContent = this.querySelector('.timeframe-name-bottom').textContent;
+          }
+          
+          // 현재 인덱스 업데이트
+          currentTimeframeIndexBottom = index;
+          
+          // 이벤트 발생 (기존 UI 시스템과 연동)
+          timeframeSelect.dispatchEvent(new Event('change'));
+          
+          console.log(`하단 분봉 변경: ${timeframe}`);
+        });
+      });
+      
+      // 하단 자동 순회 토글
+      if (btnAutoRotateBottom) {
+        btnAutoRotateBottom.addEventListener('click', function() {
+          if (autoRotateIntervalBottom) {
+            // 자동 순회 중지
+            clearInterval(autoRotateIntervalBottom);
+            autoRotateIntervalBottom = null;
+            this.textContent = '자동 순회';
+            this.classList.remove('btn-danger');
+            this.classList.add('btn-outline-info');
+          } else {
+            // 자동 순회 시작
+            autoRotateIntervalBottom = setInterval(() => {
+              currentTimeframeIndexBottom = (currentTimeframeIndexBottom + 1) % timeframeCardsBottom.length;
+              timeframeCardsBottom[currentTimeframeIndexBottom].click();
+            }, 5000); // 5초마다 순회
+            
+            this.textContent = '순회 중지';
+            this.classList.remove('btn-outline-info');
+            this.classList.add('btn-danger');
+          }
+        });
+      }
+      
+      // 초기 설정 및 자동 순회 자동 시작
+      if (timeframeCardsBottom.length > 0) {
+        // 1m부터 시작
+        timeframeCardsBottom[0].click();
+        
+        // 2초 후 자동 순회 시작
+        setTimeout(() => {
+          if (btnAutoRotateBottom && !autoRotateIntervalBottom) {
+            autoRotateIntervalBottom = setInterval(() => {
+              currentTimeframeIndexBottom = (currentTimeframeIndexBottom + 1) % timeframeCardsBottom.length;
+              timeframeCardsBottom[currentTimeframeIndexBottom].click();
+            }, 5000); // 5초마다 순회
+            
+            if (btnAutoRotateBottom) {
+              btnAutoRotateBottom.textContent = '순회 중지';
+              btnAutoRotateBottom.classList.remove('btn-outline-info');
+              btnAutoRotateBottom.classList.add('btn-danger');
+            }
+          }
+        }, 2000);
+      }
+     });
+   </script>
+</body>
+</html>
+
+

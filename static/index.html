@@ -1,0 +1,3650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>8BIT Upbit Bot UI</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body{ overflow-anchor: none; }
+    body{background:#0b1220;color:#ffffff;font-family:-apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;font-size:14px}
+    .card{background:#1e2329;border:1px solid rgba(255,255,255,0.08)}
+    #tvChart{width:80%;height:82vh;min-height:460px}
+    .kv{display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px dashed rgba(255,255,255,0.08)}
+    .buy{color:#0ecb81}.sell{color:#f6465d}
+    @media (max-width: 991px){ #tvChart{height:70vh} }
+    .toolbar .form-control,.toolbar .form-select{color:#ffffff;background:#2b3139;border:1px solid rgba(255,255,255,0.2)}
+    .toolbar .btn{color:#ffffff}
+    .form-check-label{color:#e0e7ff}
+    .kv span:first-child{color:#ffffff}
+    .kv span:last-child{color:#ffffff;font-weight:700}
+    .badge{color:#ffffff}
+    .text-muted{color:#ffffff !important}
+    /* Assets UI */
+    .asset-stat{background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px}
+    .asset-stat .label{color:#ffffff;font-size:12px}
+    .asset-stat .value{color:#ffffff;font-size:20px;font-weight:700}
+    .asset-bars{display:flex;flex-direction:column;gap:8px}
+    .asset-bar .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    .asset-bar .label{color:#ffffff;font-weight:600}
+    .asset-bar .muted{color:#ffffff;font-size:12px;margin-left:8px}
+    .asset-bar .meter{height:10px;border-radius:6px;background:#10182a;overflow:hidden;border:1px solid rgba(255,255,255,0.08)}
+    .asset-bar .fill{height:100%;background:linear-gradient(90deg,#0ecb81,#2bdab5)}
+    .asset-bar.krw .fill{background:linear-gradient(90deg,#4285f4,#72a6ff)}
+    .chip{display:inline-block;padding:3px 8px;margin:2px;border-radius:999px;background:#2b3139;border:1px solid rgba(255,255,255,0.12);font-size:12px;color:#ffffff}
+    .chip-selected{background:#0ecb81;color:#0b1220;border-color:#0ecb81;font-weight:700}
+    .chip-muted{background:#2b3139;color:#9ba4b5;border-color:rgba(255,255,255,0.08);opacity:0.65}
+    /* Win list */
+    #winList{display:flex;flex-direction:column;gap:6px;overflow-y:auto;overflow-x:hidden}
+    #winList{scrollbar-width:none;-ms-overflow-style:none}
+    #winList::-webkit-scrollbar{width:0;height:0}
+    /* Win card scroll hide scrollbar */
+    #winCard{scrollbar-width:none;-ms-overflow-style:none}
+    #winCard::-webkit-scrollbar{width:0;height:0}
+    .win-chip{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;color:#ffffff;background:#1b2437;transition:transform .2s ease, box-shadow .2s ease;min-height:auto}
+    .win-chip.positive{background:linear-gradient(90deg,rgba(14,203,129,0.35),rgba(14,203,129,0.10));}
+    .win-chip.negative{background:linear-gradient(90deg,rgba(246,70,93,0.35),rgba(246,70,93,0.10));}
+    .win-chip:hover{transform:translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.35)}
+    .win-chip .meta{font-size:11px;color:#d9e2f3;line-height:1.3;text-align:left}
+    .win-chip .val{font-weight:700;white-space:normal;word-break:break-word;flex:1}
+    /* Zone badge on win buttons */
+    .zone-badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:11px;font-weight:700;color:#0b1220}
+    .zone-blue{background:#00d1ff;color:#0b1220}
+    .zone-orange{background:#ffb703;color:#0b1220}
+    
+    /* Zone display improvements */
+    .zone-display-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .zone-display-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    
+    .zone-display-label {
+      font-size: 10px;
+      color: #888888;
+      font-weight: 500;
+    }
+    
+    .zone-display-badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    
+    .zone-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .zone-stats {
+      font-size: 11px;
+      color: #ffffff;
+      font-weight: 500;
+    }
+    
+    /* 분봉 카드 스타일 */
+    .timeframe-cards-container {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 5px 0;
+    }
+    
+    .timeframe-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+      min-width: 80px;
+      background: rgba(52, 73, 94, 0.8);
+      border: 1px solid #34495e;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .timeframe-card:hover {
+      background: rgba(52, 152, 219, 0.3);
+      border-color: #3498db;
+      transform: translateY(-2px);
+    }
+    
+    .timeframe-card.active {
+      background: rgba(52, 152, 219, 0.5);
+      border-color: #3498db;
+      box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+    }
+    
+    .timeframe-icon {
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+    
+    .timeframe-name {
+      font-weight: bold;
+      color: #ecf0f1;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+    
+    .timeframe-status {
+      font-size: 10px;
+      color: #2ecc71;
+      font-weight: 500;
+    }
+    
+         .timeframe-card:not(.active) .timeframe-status {
+       color: #95a5a6;
+     }
+     
+           /* 하단 분봉 카드 스타일 */
+      .timeframe-cards-container-bottom {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 5px 0;
+        justify-content: center;
+        min-height: 80px;
+      }
+      
+      .timeframe-card-bottom {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px;
+        min-width: 70px;
+        background: rgba(52, 73, 94, 0.8);
+        border: 1px solid #34495e;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        flex-shrink: 0;
+        height: 60px;
+        justify-content: center;
+      }
+      
+      .timeframe-card-bottom:hover {
+        background: rgba(52, 152, 219, 0.3);
+        border-color: #3498db;
+        transform: translateY(-2px);
+      }
+      
+      .timeframe-card-bottom.active {
+        background: rgba(52, 152, 219, 0.5);
+        border-color: #3498db;
+        box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+      }
+      
+      .timeframe-icon-bottom {
+        font-size: 16px;
+        margin-bottom: 3px;
+        color: #ecf0f1;
+      }
+      
+      .timeframe-name-bottom {
+        font-weight: bold;
+        color: #ecf0f1;
+        font-size: 12px;
+        margin-bottom: 2px;
+      }
+      
+      .timeframe-status-bottom {
+        font-size: 9px;
+        color: #2ecc71;
+        font-weight: 500;
+      }
+      
+      .timeframe-card-bottom:not(.active) .timeframe-status-bottom {
+        color: #95a5a6;
+      }
+    /* Win card zone theming */
+    .win-card-blue{background:linear-gradient(180deg,rgba(0,209,255,0.12),rgba(0,209,255,0.04)) !important}
+    .win-card-orange{background:linear-gradient(180deg,rgba(255,183,3,0.12),rgba(255,183,3,0.04)) !important}
+    
+    /* Win Card Styles */
+    #winCard {
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      max-height: 1140px;
+    }
+    #winCard::-webkit-scrollbar { display: none; }
+    
+    .win-zone-section {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 8px;
+    }
+    
+    .zone-consistency-display {
+      font-size: 10px;
+      color: #888;
+    }
+    
+    .zone-consistency-content {
+      font-size: 11px;
+      color: #333;
+      font-weight: 500;
+      line-height: 1.2;
+      padding: 4px 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border-left: 3px solid #0ecb81;
+    }
+    
+    .zone-consistency-content .sync-status {
+      color: #0ecb81;
+      font-weight: 600;
+    }
+    
+    .win-progress-track {
+      height: 6px;
+      background: #0e1424;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .win-progress-bar {
+      height: 100%;
+      width: 1%;
+      background: #ffffff;
+      transition: width 0.4s ease;
+    }
+    
+    .win-history-list {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    
+    /* PnL slider glow */
+    @keyframes glowGreen { 0%{ box-shadow:0 0 0 rgba(14,203,129,0);} 50%{ box-shadow:0 0 12px rgba(14,203,129,0.8);} 100%{ box-shadow:0 0 0 rgba(14,203,129,0);} }
+    @keyframes glowRed { 0%{ box-shadow:0 0 0 rgba(246,70,93,0);} 50%{ box-shadow:0 0 12px rgba(246,70,93,0.8);} 100%{ box-shadow:0 0 0 rgba(246,70,93,0);} }
+    .glow-green{ animation: glowGreen .9s ease; }
+    .glow-red{ animation: glowRed .9s ease; }
+    #pnlLeftLabel,#pnlRightLabel{ color:#ffffff }
+    /* Masonry cards animation */
+    .nb-coin-item{ transition: transform .3s ease, width .3s ease, height .3s ease, opacity .3s ease; will-change: transform; }
+    /* Speech bubble */
+    .nb-bubble{ position:relative; background:#1b2437; border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:8px 10px; color:#ffffff; font-size:12px }
+    .nb-bubble:after{ content:""; position:absolute; bottom:-6px; left:18px; border-width:6px 6px 0 6px; border-style:solid; border-color:rgba(255,255,255,0.15) transparent transparent transparent }
+    .nb-bubble:before{ content:""; position:absolute; bottom:-5px; left:19px; border-width:5px 5px 0 5px; border-style:solid; border-color:#1b2437 transparent transparent transparent }
+    
+    /* Auto Trading Status Styles */
+    .auto-trading-status {
+      background: #0e1424;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .auto-trading-status h4 {
+      color: #ffffff;
+      font-size: 14px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    
+    .member-auto-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+    }
+    
+    .member-auto-status:last-child {
+      border-bottom: none;
+    }
+    
+    .member-auto-status span {
+      color: #ffffff;
+    }
+    
+    .member-auto-status span:first-child {
+      font-weight: 600;
+      flex: 1;
+    }
+    
+    .member-auto-status span:nth-child(2) {
+      margin: 0 12px;
+      font-size: 11px;
+    }
+    
+    .member-auto-status span:last-child {
+      font-size: 11px;
+      color: #d9e2f3;
+    }
+    
+    /* 자동화 모드 표시 (선택적) */
+    .auto-mode-indicator {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(14, 203, 129, 0.2);
+      border: 1px solid #0ecb81;
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #0ecb81;
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 10000;
+      backdrop-filter: blur(10px);
+      display: none; /* 필요시 표시 */
+    }
+    
+    /* 분봉 순회 프로그레스바 스타일 */
+    #timeframeCycleProgress {
+      box-shadow: 0 0 10px rgba(0, 209, 255, 0.3);
+      animation: progressGlow 2s ease-in-out infinite;
+    }
+    
+    @keyframes progressGlow {
+      0%, 100% { box-shadow: 0 0 10px rgba(0, 209, 255, 0.3); }
+      50% { box-shadow: 0 0 20px rgba(0, 209, 255, 0.6); }
+    }
+    
+    #timeframeCycleProgress[style*="width: 100%"] {
+      animation: progressComplete 0.5s ease-in-out;
+    }
+    
+    @keyframes progressComplete {
+      0% { background: linear-gradient(90deg, #00d1ff, #4285f4); }
+      50% { background: linear-gradient(90deg, #0ecb81, #2bdab5); }
+      100% { background: linear-gradient(90deg, #00d1ff, #4285f4); }
+    }
+  </style>
+</head>
+<body class="text-white">
+  <div class="container-fluid py-3">
+
+    
+    <div class="row g-3 justify-content-center">
+      <div class="col-12 mt-3">
+        <!-- 분봉 선택 카드 (기존 하단 카드 이동) -->
+        <div class="card border-secondary rounded-3 p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <strong class="text-white">분봉 선택</strong>
+            <div class="d-flex align-items-center gap-2">
+              <button id="btnAutoRotateBottom" class="btn btn-sm btn-outline-info">자동 순회</button>
+              <span id="currentTimeframeBottom" class="badge bg-primary">10m</span>
+            </div>
+          </div>
+          <div class="timeframe-cards-container-bottom">
+            <div class="timeframe-card-bottom" data-timeframe="minute1">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute3">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">3m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute5">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">5m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom active" data-timeframe="minute10">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">10m</div>
+              <div class="timeframe-status-bottom">활성</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute15">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">15m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute30">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">30m</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="minute60">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1h</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+            <div class="timeframe-card-bottom" data-timeframe="day">
+              <div class="timeframe-icon-bottom">⏱️</div>
+              <div class="timeframe-name-bottom">1D</div>
+              <div class="timeframe-status-bottom">대기</div>
+            </div>
+          </div>
+        </div>
+
+    <!-- Global Profit/Loss slider (uses Win% from backtest) -->
+    <div class="card border-secondary rounded-3 p-2 mb-3">
+      <div class="pnl-track" style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:10px; overflow:hidden; position:relative">
+        <div id="pnlCenter" style="position:absolute; left:50%; top:0; width:2px; height:100%; background:#ffffff"></div>
+        <div id="pnlLeftBar" style="position:absolute; right:50%; top:0; height:100%; width:0%; background:linear-gradient(90deg, rgba(14,203,129,0.9), rgba(14,203,129,0.45)); transition:width .6s ease"></div>
+        <div id="pnlRightBar" style="position:absolute; left:50%; top:0; height:100%; width:0%; background:linear-gradient(90deg, rgba(246,70,93,0.45), rgba(246,70,93,0.9)); transition:width .6s ease"></div>
+      </div>
+      <div class="d-flex justify-content-between mt-1" style="font-size:12px">
+        <div id="pnlLeftLabel">Profit 0%</div>
+        <div id="pnlRightLabel">Loss 100%</div>
+      </div>
+      <div class="mt-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="text-muted" style="font-size:12px">AutoTrade Readiness</span>
+          <span id="autoGaugeText" class="badge bg-secondary">-</span>
+        </div>
+        <div style="height:8px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden;">
+          <div id="autoGaugeBar" style="height:100%; width:0%; background:linear-gradient(90deg,#2bdab5,#0ecb81); transition:width .4s ease"></div>
+        </div>
+      </div>
+      
+      <!-- Information Trust Sliders -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted" style="font-size:12px">Information Trust Level</span>
+          <span id="trustStatusText" class="badge bg-info">Balanced</span>
+        </div>
+        
+        <!-- ML Model Trust Slider -->
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="text-muted" style="font-size:11px">🤖 ML Model Trust</span>
+            <span id="mlTrustValue" class="badge bg-primary" style="font-size:10px">50%</span>
+          </div>
+          <div style="height:6px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:4px; overflow:hidden; position:relative;">
+            <div id="mlTrustBar" style="height:100%; width:50%; background:linear-gradient(90deg,#4285f4,#72a6ff); transition:width .3s ease"></div>
+            <input type="range" id="mlTrustSlider" min="0" max="100" value="50" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+          </div>
+        </div>
+        
+        <!-- N/B Guild Trust Slider -->
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="text-muted" style="font-size:11px">🏛️ N/B Guild Trust</span>
+            <span id="nbTrustValue" class="badge bg-warning" style="font-size:10px">50%</span>
+          </div>
+          <div style="height:6px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:4px; overflow:hidden; position:relative;">
+            <div id="nbTrustBar" style="height:100%; width:50%; background:linear-gradient(90deg,#ffb703,#ffd54f); transition:width .3s ease"></div>
+            <input type="range" id="nbTrustSlider" min="0" max="100" value="50" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+          </div>
+        </div>
+        
+        <!-- Trust Balance Indicator -->
+        <div class="mt-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted" style="font-size:10px">Trust Balance</span>
+            <span id="trustBalanceText" class="text-muted" style="font-size:10px">ML: 50% | N/B: 50%</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 분봉 순회 프로그레스바 -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:12px">분봉 자동 순회</span>
+            <span id="timeframeCycleStatus" class="badge bg-success" style="font-size:10px">활성</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span id="currentTimeframeDisplay" class="badge bg-primary" style="font-size:11px">10m</span>
+            <span id="nextTimeframeDisplay" class="text-muted" style="font-size:11px">→ 15m</span>
+          </div>
+        </div>
+        <div style="height:16px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:8px; overflow:hidden; position:relative">
+          <div id="timeframeCycleProgress" style="height:100%; width:0%; background:linear-gradient(90deg, #00d1ff, #4285f4); transition:width 0.1s linear; position:relative">
+            <div style="position:absolute; right:0; top:0; bottom:0; width:2px; background:#ffffff; opacity:0.5"></div>
+          </div>
+          <div id="timeframeCycleText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:11px; font-weight:600; color:#ffffff; text-shadow:0 0 4px rgba(0,0,0,0.8); pointer-events:none">
+            <span id="timeframeCyclePercent">0%</span>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between mt-1" style="font-size:10px">
+          <span class="text-muted">순회 시간: <span id="timeframeCycleDuration">30</span>초</span>
+          <button id="toggleTimeframeCycle" class="btn btn-sm btn-outline-secondary" style="padding:2px 8px; font-size:10px">일시정지</button>
+        </div>
+      </div>
+      
+      <!-- N/B Zone Strip -->
+      <div class="mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:12px">N/B Zone Status</span>
+            <span id="nbZoneTimeframe" class="badge bg-info" style="font-size:10px">-</span>
+          </div>
+          <span id="nbZoneNow" class="badge bg-secondary">-</span>
+        </div>
+        <div id="nbZoneStrip" style="height:12px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; display:flex; align-items:center; padding:2px">
+          <div class="text-muted" style="font-size:11px; padding-left:6px">Loading…</div>
+        </div>
+                      <div class="text-white" style="font-size:11px; margin-top:4px">Visible chart zones (left=older → right=newer)</div>
+      </div>
+
+      <!-- Integrated Guild Members & Auto Trading -->
+      <div class="mt-3 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <strong class="text-white" style="font-size:12px">🏰 Guild Members</strong>
+        </div>
+        <div id="integratedGuildStatus" class="mt-1" style="font-size:12px; color:#ffffff; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:8px; min-height:22px">
+          <div class="text-muted" style="font-size:11px">Guild 시스템 초기화 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="m-0">8BIT Upbit Bot - Chart</h3>
+      <div class="d-flex align-items-center gap-3">
+        <!-- Wave Counter -->
+        <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-primary" style="font-size: 10px;">Blue Wave</span>
+            <span id="blueWaveCount" class="badge bg-info" style="font-size: 10px;">5</span>
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-warning" style="font-size: 10px;">Orange Wave</span>
+            <span id="orangeWaveCount" class="badge bg-info" style="font-size: 10px;">3</span>
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="badge bg-secondary" style="font-size: 10px;">Last</span>
+            <span id="lastWaveType" class="badge bg-primary" style="font-size: 10px;">BLUE</span>
+          </div>
+        </div>
+        <div class="text-muted" id="meta">-</div>
+      </div>
+    </div>
+
+    <!-- Top Status + Layout switch: chart left, assets right -->
+    <div class="row g-3 align-items-stretch mb-3">
+      <div class="col-12 col-lg-2">
+        <div id="winCard" class="card border-secondary rounded-3 p-3 h-100 d-flex flex-column" style="background:linear-gradient(180deg, rgba(255,183,3,0.10), rgba(14,20,36,0.85)); box-shadow:0 10px 30px rgba(0,0,0,0.35);">
+          <!-- Header -->
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <strong class="text-white">Win%</strong>
+              <div style="font-size:11px; color:#d9e2f3;">로컬 스냅샷 + 서버 히스토리</div>
+            </div>
+            <span id="winMajor" class="badge bg-white text-dark">-</span>
+          </div>
+          
+          <!-- Zone Status Section -->
+          <div class="win-zone-section mb-3" style="background:rgba(0,0,0,0.25); border-radius:10px; padding:10px;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="zone-display-label">25개 히스토리</span>
+              <div class="d-flex align-items-center gap-2" style="font-size:11px; color:#d9e2f3;">
+                <span id="winLocalCount" class="badge bg-dark text-white">0</span>
+                <span id="winServerCount" class="badge bg-secondary text-white">0</span>
+              </div>
+            </div>
+            <div id="zoneConsistencyInfo" class="zone-consistency-display">
+              <div class="zone-consistency-content">
+                🔄 <span class="sync-status">실시간 동기화</span> | 
+                N/B: 🟠ORANGE | 
+                ML: 🔵BLUE
+              </div>
+            </div>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div id="winFillTrack" class="win-progress-track mb-3" style="height:10px; border-radius:12px;">
+            <div id="winFillBar" class="win-progress-bar"></div>
+          </div>
+
+          <!-- Trend Chart removed -->
+          
+          <!-- Win History List -->
+          <div id="winList" class="win-history-list flex-grow-1" style="gap:8px;"></div>
+        </div>
+      </div>
+
+
+      
+
+      <div class="col-12 col-lg-8">
+         <div class="card border-secondary rounded-3 h-100">
+           <div class="card-body">
+             <div id="tvChart" class="mt-2" style="width: 99%; margin: 0 auto;"></div>
+             
+             <div class="mt-3"><!-- Auto Buy Controls -->
+              <div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">⚙️ Auto Buy (BLUE Zone)</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <!-- 시작/중지 버튼 -->
+                  <div class="d-flex justify-content-center gap-2 mb-3">
+                    <button id="abStartBtn" class="btn btn-sm" style="background: linear-gradient(90deg,#00d1ff,#4285f4); color:#fff; font-weight:600; padding:8px 32px; border:none; border-radius:6px;">
+                      ▶ 시작
+                    </button>
+                    <button id="abStopBtn" class="btn btn-sm" style="background: linear-gradient(90deg,#ff4757,#ff6b81); color:#fff; font-weight:600; padding:8px 32px; border:none; border-radius:6px;">
+                      ■ 중지
+                    </button>
+                  </div>
+                  
+                  <!-- 체크 간격 선택 (셀렉트) -->
+                  <div style="margin-bottom:10px;">
+                    <div style="font-size:10px; color:#9aa8c2; margin-bottom:4px;">체크 간격 (주기)</div>
+                    <select id="abInterval" style="width:100%; background:#0e1424; border:1px solid rgba(255,255,255,0.2); color:#e6eefc; border-radius:6px; padding:8px 12px; font-size:13px; font-weight:600;">
+                      <option value="">-- 간격 선택 --</option>
+                      <option value="minute1">1분 (1m)</option>
+                      <option value="minute5">5분 (5m)</option>
+                      <option value="minute10">10분 (10m)</option>
+                      <option value="minute15">15분 (15m)</option>
+                      <option value="minute30">30분 (30m)</option>
+                      <option value="minute60">1시간 (1h)</option>
+                      <option value="minute120">2시간 (2h)</option>
+                      <option value="minute240">4시간 (4h)</option>
+                      <option value="minute360">6시간 (6h)</option>
+                      <option value="minute480">8시간 (8h)</option>
+                    </select>
+                  </div>
+                  
+                  <!-- 프로그레스바 및 타이머 -->
+                  <div class="mt-2">
+                    <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                      <span id="abStatusText" style="color:#00d1ff; font-weight:600;">⏸ 중지됨</span>
+                      <span id="abNextText" style="color:#9aa8c2;">-</span>
+                    </div>
+                    <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                      <div id="abProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#00d1ff,#4285f4); transition:width .25s linear"></div>
+                      <div id="abProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                    </div>
+                  </div>
+                  <div class="mt-2" style="font-size:10px; color:#9aa8c2;">💡 선택한 간격마다 BLUE Zone 체크 → 매수 실행 반복</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="text-white">Model Narrative (EN)</strong>
+                <span id="nbNarrativeBadge" class="badge bg-secondary">-</span>
+              </div>
+              <div id="nbNarrative" style="font-size:13px; color:#e6eefc; background:#0e1424; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:10px; min-height:52px">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-2">
+        <div id="currentCard" class="card border-secondary rounded-3 p-3 h-100 d-flex flex-column" style="min-height:240px; background: linear-gradient(135deg, rgba(30,35,41,0.9), rgba(14,20,36,0.9));">
+          <!-- 헤더 -->
+          <div class="d-flex justify-content-between align-items-center mb-3" style="border-bottom: 2px solid rgba(0,209,255,0.3); padding-bottom: 10px;">
+            <div>
+              <strong class="text-white" style="font-size: 16px;">📊 현재 카드</strong>
+              <div style="font-size: 10px; margin-top: 6px;">
+                <div class="text-muted" id="ccTimestamp">-</div>
+                <div style="color: #00d1ff; font-weight: 600; margin-top: 3px;">분봉: <span id="ccTimeframeDisplay">10m</span></div>
+              </div>
+            </div>
+            <span id="ccInterval" class="badge bg-info" style="font-size: 10px; padding: 4px 8px;">-</span>
+          </div>
+          
+          <!-- 카드 등급 섹션 -->
+          <div id="ccRatingSection" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.2);">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">카드 등급</div>
+                <div id="ccRatingDisplay" style="font-size: 18px; font-weight: 700;">-</div>
+              </div>
+              <div class="text-end">
+                <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">점수</div>
+                <div id="ccRatingScore" style="font-size: 16px; font-weight: 600; color: #00d1ff;">-</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 현재 가격 섹션 (강조) -->
+          <div style="background: rgba(0,209,255,0.1); border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(0,209,255,0.3);">
+            <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">현재 가격</div>
+            <div id="ccPrice" style="font-size: 20px; font-weight: 700; color: #00d1ff; word-break: break-all;">-</div>
+          </div>
+          
+          <!-- 거래량 & 거래대금 섹션 -->
+          <div class="row g-2" style="margin-bottom: 12px;">
+            <div class="col-6">
+              <div style="background: rgba(14,203,129,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(14,203,129,0.3);">
+                <div class="text-muted" style="font-size: 9px; margin-bottom: 4px;">거래량</div>
+                <div id="ccVolume" style="font-size: 14px; font-weight: 700; color: #0ecb81; word-break: break-all;">-</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background: rgba(66,133,244,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(66,133,244,0.3);">
+                <div class="text-muted" style="font-size: 9px; margin-bottom: 4px;">거래대금</div>
+                <div id="ccTurnover" style="font-size: 14px; font-weight: 700; color: #4285f4; word-break: break-all;">-</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 가격 N/B 섹션 -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 가격 N/B</div>
+            <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted" style="font-size: 10px;">MAX</span>
+                <span id="ccPriceMax" style="font-size: 11px; font-weight: 600; color: #0ecb81;">-</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-muted" style="font-size: 10px;">MIN</span>
+                <span id="ccPriceMin" style="font-size: 11px; font-weight: 600; color: #f6465d;">-</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 거래량 N/B 섹션 -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📈 거래량 N/B</div>
+            <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted" style="font-size: 10px;">MAX</span>
+                <span id="ccVolMax" style="font-size: 11px; font-weight: 600; color: #2bdab5;">-</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-muted" style="font-size: 10px;">MIN</span>
+                <span id="ccVolMin" style="font-size: 11px; font-weight: 600; color: #ffb703;">-</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 거래대금 N/B 섹션 -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💵 거래대금 N/B</div>
+            <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted" style="font-size: 10px;">MAX</span>
+                <span id="ccTurnMax" style="font-size: 11px; font-weight: 600; color: #4285f4;">-</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-muted" style="font-size: 10px;">MIN</span>
+                <span id="ccTurnMin" style="font-size: 11px; font-weight: 600; color: #9c27b0;">-</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 요약 그래프 -->
+          <div style="margin-bottom: 12px; position: relative; height: 80px;">
+            <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 추이 그래프</div>
+            <canvas id="ccSummaryChart" style="position: absolute; top: 20px; left: 0; width: 100%; height: 60px !important;"></canvas>
+          </div>
+          
+          <!-- N/B Zone Status 섹션 -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">🗺️ N/B Zone</div>
+            <div id="ccNBZone" style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 20px; word-break: break-word;">-</div>
+          </div>
+          
+          
+          <!-- 현재 카드: 판매 실현 손익 표시 -->
+          <div class="col-12">
+            <div class="row g-2 mt-2">
+              <div class="col-6">
+                <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 8px;">
+                  <div class="text-muted" style="font-size: 10px;">판매 평균 실현 손익</div>
+                  <div id="ccRealizedAvg" style="font-size: 14px; font-weight: 700;">0 KRW</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 8px;">
+                  <div class="text-muted" style="font-size: 10px;">판매 최고 실현 손익</div>
+                  <div id="ccRealizedMax" style="font-size: 14px; font-weight: 700;">0 KRW</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 버튼 및 상태 -->
+          <div class="mt-auto pt-2">
+            <div style="margin-bottom: 8px;">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <label class="text-muted" style="font-size: 11px; white-space: nowrap;">매수 금액</label>
+                <input id="ccBuyAmount" type="number" value="5000" min="1000" step="1000" class="form-control form-control-sm" style="flex: 1;" />
+              </div>
+              <div class="d-grid gap-2">
+                <button id="ccBuy" class="btn btn-sm btn-success">🛒 현재 카드 매수</button>
+                <button id="ccRefresh" class="btn btn-sm btn-outline-info">🔄 새로고침</button>
+              </div>
+            </div>
+            <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <button id="ccSave" class="btn btn-sm btn-primary w-100 mb-2">💾 NBverse 저장</button>
+              <div style="font-size: 11px; font-weight: 600; color: #2ecc71; text-align: center;">
+                <span id="ccSaveHint">대기</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 매수/매도 통계 섹션 -->
+    <div class="row g-3 mb-3">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">거래 통계</h3>
+          <button id="tradeStatsRefresh" class="btn btn-sm btn-outline-info">🔄 새로고침</button>
+        </div>
+      </div>
+      
+    <!-- 자산 요약 -->
+    <div class="card border-secondary rounded-3 p-3 mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <strong class="text-white">자산</strong>
+          <span id="assetsMeta" class="text-muted" style="font-size:11px">-</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" id="assetsAuto" checked>
+            <label class="form-check-label text-muted" for="assetsAuto" style="font-size:11px">자동</label>
+          </div>
+          <button id="assetsRefresh" class="btn btn-sm btn-outline-info">새로고침</button>
+        </div>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-md-4">
+          <div class="asset-stat">
+            <div class="label">총 자산 (KRW 환산)</div>
+            <div class="value" id="assetTotal">-</div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="asset-stat">
+            <div class="label">보유 KRW</div>
+            <div class="value" id="assetBuyable">-</div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="asset-stat">
+            <div class="label">매도 가능 코인</div>
+            <div class="value" id="assetSellable">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="asset-bars" id="assetsBars"></div>
+    </div>
+
+      <!-- 매수 완료 카드 -->
+      <div class="col-12 col-md-6">
+        <div class="card border-success rounded-3 p-3" style="background: linear-gradient(135deg, rgba(14,203,129,0.1), rgba(14,203,129,0.05));">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h5 class="m-0" style="color: #0ecb81;">🛒 매수 완료 카드</h5>
+              <small class="text-muted" id="buyStatsTime">-</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button id="exportBuyCards" class="btn btn-sm btn-outline-success" title="매수 카드 내보내기">💾 JSON</button>
+              <span id="buyCount" class="badge bg-success" style="font-size: 16px;">0</span>
+            </div>
+          </div>
+          
+          <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px; max-height: 600px; overflow-y: auto;">
+            <div id="buyOrderList" style="font-size: 12px; color: #e6eefc;">
+              <div class="text-center text-muted py-2">매수 내역이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 매도 완료 카드 -->
+      <div class="col-12 col-md-6">
+        <div class="card border-danger rounded-3 p-3" style="background: linear-gradient(135deg, rgba(246,70,93,0.1), rgba(246,70,93,0.05));">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h5 class="m-0" style="color: #f6465d;">💰 매도 완료</h5>
+              <small class="text-muted" id="sellStatsTime">-</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button id="exportSellCards" class="btn btn-sm btn-outline-danger" title="매도 카드 내보내기">💾 JSON</button>
+              <span id="sellCount" class="badge bg-danger" style="font-size: 16px;">0</span>
+            </div>
+          </div>
+          
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                <div class="text-muted" style="font-size: 10px;">총 매도 금액</div>
+                <div id="sellTotalAmount" style="font-size: 16px; font-weight: 700; color: #f6465d;">0 KRW</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                <div class="text-muted" style="font-size: 10px;">평균 매도가</div>
+                <div id="sellAvgPrice" style="font-size: 16px; font-weight: 700; color: #f6465d;">0 KRW</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                <div class="text-muted" style="font-size: 10px;">총 수익</div>
+                <div id="totalProfit" style="font-size: 16px; font-weight: 700;">0 KRW</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                <div class="text-muted" style="font-size: 10px;">수익률</div>
+                <div id="profitRate" style="font-size: 16px; font-weight: 700;">0%</div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px; max-height: 100%; overflow-y: auto;">
+            <div class="text-muted mb-2" style="font-size: 11px;">최근 매도 내역</div>
+            <div id="sellOrderList" style="font-size: 12px; color: #e6eefc;">
+              <div class="text-center text-muted py-2">매도 내역이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 매수/매도 로그 섹션 -->
+    <div class="row g-3 mb-3">
+      <div class="col-12">
+        <div class="card border-secondary rounded-3 p-3" style="background: rgba(14,20,36,0.6);">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="m-0">거래 로그</h5>
+            <button id="tradeLogRefresh" class="btn btn-sm btn-outline-info">🔄 새로고침</button>
+          </div>
+          <div id="tradeLogList" style="max-height: 220px; overflow-y: auto; font-size: 12px; color: #e6eefc;">
+            <div class="text-center text-muted py-2">로그가 없습니다</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+        <div class="card border-secondary rounded-3 p-3">
+          <div class="row g-2 align-items-center mb-3 toolbar">
+            <div class="col-auto">
+              <select id="timeframe" class="form-select form-select-sm">
+                <option value="minute1">1m</option>
+                <option value="minute3">3m</option>
+                <option value="minute5">5m</option>
+                <option value="minute10" selected>10m</option>
+                <option value="minute15">15m</option>
+                <option value="minute30">30m</option>
+                <option value="minute60">1h</option>
+                <option value="day">1D</option>
+              </select>
+            </div>
+            <div class="col-auto"><button id="botStart" class="btn btn-primary btn-sm">Start Bot</button></div>
+            <div class="col-auto"><button id="botStop" class="btn btn-outline-light btn-sm">Stop Bot</button></div>
+            <div class="col-auto"><button id="btnShot" class="btn btn-secondary btn-sm">Screenshot</button></div>
+            <div class="col-auto"><button id="btnBacktest" class="btn btn-outline-info btn-sm">Backtest</button></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="autoBtToggle">
+              <label class="form-check-label text-muted" for="autoBtToggle">Auto BT</label>
+            </div>
+            <div class="col-auto text-muted">sec</div>
+            <div class="col-auto"><input id="autoBtSec" type="number" value="60" min="10" step="10" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnOptimize" class="btn btn-success btn-sm">Auto-Tune NB</button></div>
+            <div class="col-auto"><button id="btnTrain" class="btn btn-warning btn-sm">Train (Auto Period)</button></div>
+            <div class="col-auto text-muted">Cnt</div>
+            <div class="col-auto"><input id="trainCount" type="number" value="1800" min="300" step="300" class="form-control form-control-sm" style="width:90px" /></div>
+            <div class="col-auto text-muted">Seg</div>
+            <div class="col-auto"><input id="trainSeg" type="number" value="3" min="2" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnMlTrain" class="btn btn-danger btn-sm">ML Train</button></div>
+            <div class="col-auto"><button id="btnMlPredict" class="btn btn-outline-danger btn-sm">ML Predict</button></div>
+            <div class="col-12 col-lg-4">
+              <div class="card border-secondary rounded-3 p-2" style="min-height:80px">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <strong class="text-white">Model Insight</strong>
+                  <span id="miZone" class="badge bg-secondary">-</span>
+                </div>
+                <div id="miText" style="font-size:12px; color:#e6eefc">-</div>
+              </div>
+            </div>
+            <div class="col-auto"><button id="btnMlMetrics" class="btn btn-outline-warning btn-sm">ML Metrics</button></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="mlAuto">
+              <label class="form-check-label text-muted" for="mlAuto">ML Auto</label>
+            </div>
+            <div class="col-auto text-muted">N</div>
+            <div class="col-auto"><input id="mlRandN" type="number" value="12" min="1" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto"><button id="btnMlRandom" class="btn btn-outline-warning btn-sm">ML Random</button></div>
+            <div class="col-auto"><button id="btnClearOrders" class="btn btn-outline-danger btn-sm">Clear Orders</button></div>
+            <div class="col-auto text-muted">NB Window</div>
+            <div class="col-auto"><input id="nbWindow" type="number" value="100" min="20" step="10" class="form-control form-control-sm" style="width:90px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="nbToggle" checked>
+              <label class="form-check-label text-muted" for="nbToggle">Show NB</label>
+            </div>
+            <div class="col-12"></div>
+            <div class="col-auto text-muted">BUY≥r</div>
+            <div class="col-auto"><input id="nbBuyTh" type="number" value="0.70" min="0.5" max="0.95" step="0.01" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">SELL≤r</div>
+            <div class="col-auto"><input id="nbSellTh" type="number" value="0.30" min="0.05" max="0.5" step="0.01" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">Pullback%</div>
+            <div class="col-auto"><input id="nbPullback" type="number" value="40" min="10" max="80" step="1" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto text-muted">Debounce</div>
+            <div class="col-auto"><input id="nbDebounce" type="number" value="6" min="0" max="20" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">Forecast</div>
+            <div class="col-auto"><input id="fcWindow" type="number" value="50" min="10" step="5" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto"><input id="fcHorizon" type="number" value="30" min="1" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="fcToggle" checked>
+              <label class="form-check-label text-muted" for="fcToggle">Show</label>
+            </div>
+            
+            <div class="col-auto text-muted">Paper</div>
+            <div class="col-auto">
+              <select id="paperMode" class="form-select form-select-sm">
+                <option value="true" selected>true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+            <div class="col-auto text-muted">Order KRW</div>
+            <div class="col-auto"><input id="orderKrw" type="number" value="5000" min="1000" step="1000" class="form-control form-control-sm" style="width:110px" /></div>
+            <div class="col-auto text-muted">EMA</div>
+            <div class="col-auto"><input id="emaFast" type="number" value="10" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto">/</div>
+            <div class="col-auto"><input id="emaSlow" type="number" value="30" class="form-control form-control-sm" style="width:80px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="emaFilter" checked>
+              <label class="form-check-label text-muted" for="emaFilter">EMA Filter</label>
+            </div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="nbFromEma">
+              <label class="form-check-label text-muted" for="nbFromEma">NB from EMA</label>
+            </div>
+            <div class="col-auto text-muted">NB EMA</div>
+            <div class="col-auto"><input id="nbEmaPeriod" type="number" value="10" min="2" step="1" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-12"></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showSMA" checked>
+              <label class="form-check-label text-muted" for="showSMA">SMA</label>
+            </div>
+            <div class="col-auto text-muted">50</div>
+            <div class="col-auto"><input id="sma50" type="number" value="50" min="5" step="5" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">100</div>
+            <div class="col-auto"><input id="sma100" type="number" value="100" min="10" step="5" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto text-muted">200</div>
+            <div class="col-auto"><input id="sma200" type="number" value="200" min="20" step="10" class="form-control form-control-sm" style="width:70px" /></div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showEMA9" checked>
+              <label class="form-check-label text-muted" for="showEMA9">EMA 9/12/26</label>
+            </div>
+            <div class="col-auto text-muted">Ichimoku</div>
+            <div class="col-auto form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showIchimoku">
+              <label class="form-check-label text-muted" for="showIchimoku">Tenkan/Kijun</label>
+            </div>
+            <div class="col-auto text-muted">9</div>
+            <div class="col-auto"><input id="ichiTenkan" type="number" value="9" min="5" step="1" class="form-control form-control-sm" style="width:60px" /></div>
+            <div class="col-auto text-muted">26</div>
+            <div class="col-auto"><input id="ichiKijun" type="number" value="26" min="10" step="1" class="form-control form-control-sm" style="width:60px" /></div>
+          </div>
+          <hr class="text-secondary"/>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong class="text-white">Live Log</strong>
+            <div>
+              <button id="btnClearLog" class="btn btn-sm btn-outline-light me-2">Clear</button>
+              <div class="form-check form-switch d-inline-block">
+                <input class="form-check-input" type="checkbox" id="logAutoscroll">
+                <label class="form-check-label text-muted" for="logAutoscroll">Auto</label>
+              </div>
+            </div>
+          </div>
+          <pre id="logBox" style="height:160px;overflow:auto;overflow-anchor:none;background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;margin:0;color:#a7b4d7;font-size:12px;line-height:1.35"></pre>
+          <div id="mlMetricsBox" class="mt-2" style="font-size:12px;color:#e6eefc"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+     <!-- Orders Log Bottom Section -->
+   <div class="row g-3 justify-content-center mt-3">
+     <div class="col-12">
+       <div class="card border-secondary rounded-3 p-3">
+         <div class="d-flex justify-content-between align-items-center mb-2">
+           <strong class="text-white">Order Log</strong>
+           <div>
+             <button id="btnOrderExport" class="btn btn-sm btn-outline-light me-2">Export CSV</button>
+             <button id="btnOrderClear" class="btn btn-sm btn-outline-danger">Clear</button>
+           </div>
+         </div>
+         <div id="orderLog" style="height:180px;overflow:auto;overflow-anchor:none;background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;margin:0;color:#e6eefc;font-size:12px;line-height:1.35"></div>
+       </div>
+     </div>
+   </div>
+   </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"></script>
+  <!-- Disabled to stop repeated timeouts/readyState errors during trading UI use -->
+  <!-- <script src="/static/mayor-guidance.js?v=dev"></script> -->
+  <!-- <script src="/static/village-trading-process.js?v=dev"></script> -->
+  <script src="/static/trainer-system.js?v=dev"></script>
+  <script src="/static/village-learning-system.js?v=dev"></script>
+  <script src="/static/guild-members-status.js?v=dev"></script>
+  <script src="/static/trust-module.js?v=dev"></script>
+  <script src="/static/card-rating-system.js?v=dev"></script>
+  <script src="/static/ui.js?v=dev"></script>
+  <!-- External N/B calculation library (overrides local BIT_* functions) -->
+  <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.v.0.2.js"></script>
+  
+  <!-- 분봉 카드 기능 스크립트 -->
+  <script>
+    let ccSummaryChart = null; // 글로벌 차트 인스턴스
+    let currentActiveTimeframe = 'minute10'; // 현재 활성 분봉 추적
+    window.currentActiveTimeframe = currentActiveTimeframe; // 전역 동기화
+    const WIN_LS_KEY = 'winClientHistoryV1';
+    let winTrendChart = null;
+
+    function restoreWinHistoryFromLocal() {
+      try {
+        const raw = localStorage.getItem(WIN_LS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) {
+          window.winClientHistory = parsed;
+        } else {
+          window.winClientHistory = [];
+        }
+      } catch (_) {
+        window.winClientHistory = [];
+      }
+    }
+
+    function persistWinHistoryToLocal() {
+      try {
+        const list = Array.isArray(window.winClientHistory) ? window.winClientHistory.slice(0, 200) : [];
+        localStorage.setItem(WIN_LS_KEY, JSON.stringify(list));
+      } catch (_) {}
+    }
+    
+    // 현재 카드 스냅샷을 Win% 표시용으로 적재 (세션 내 누적)
+    function addCurrentWinSnapshot() {
+      try {
+        const cc = window.ccCurrentData;
+        const cr = window.ccCurrentRating;
+        if (!cc || !cr) {
+          console.warn('⚠️ Win% 스냅샷 스킵: 현재 카드 데이터 없음');
+          return;
+        }
+        
+        const tf = window.currentActiveTimeframe || cc.interval || 'minute10';
+        const nowIso = new Date().toISOString();
+        if (!window.winClientHistory) window.winClientHistory = [];
+
+        // Zone은 DOM에서 읽거나 전역 변수 사용
+        let zone = window.ccCurrentZone || null;
+        if (!zone) {
+          try {
+            const zoneEl = document.getElementById('ccNBZone');
+            if (zoneEl) {
+              const txt = zoneEl.textContent || '';
+              if (txt.includes('BLUE')) zone = 'BLUE';
+              else if (txt.includes('ORANGE')) zone = 'ORANGE';
+            }
+          } catch(_) {}
+        }
+
+        const last = window.winClientHistory[0];
+        // 중복 방지: 같은 TF에서 동일 코드가 2초 이내 재적재 시 스킵
+        if (last) {
+          const dt = Math.abs(new Date(nowIso).getTime() - new Date(last.ts).getTime());
+          if (last.tf === tf && last.code === cr.code && dt < 2000) {
+            console.log('⏭️ Win% 스냅샷 중복 스킵:', cr.code);
+            return;
+          }
+        }
+
+        // Zone이 NONE이면 스냅샷 추가 안 함
+        if (!zone || zone === '-' || zone === 'NONE') {
+          console.log('⏭️ Win% 스냅샷 스킵: Zone이 없음 ('+zone+')');
+          return;
+        }
+        
+        const entry = {
+          ts: nowIso,
+          tf,
+          zone,
+          code: cr.code,
+          league: cr.league,
+          group: cr.group,
+          super: !!cr.super,
+          avgPts: cr.avgPts,
+          enhancement: cr.mlEnhancement || cr.enhancement || 1,
+          mlGrade: cr.mlGrade || null,
+          mlEnhancement: cr.mlEnhancement || null
+        };
+        window.winClientHistory.unshift(entry);
+        // 길이 제한
+        window.winClientHistory = window.winClientHistory.slice(0, 200);
+        persistWinHistoryToLocal();
+        console.log('✅ Win% 스냅샷 추가:', entry.code, entry.tf, 'Zone='+entry.zone, 'total='+window.winClientHistory.length);
+        
+        // Win% 패널 즉시 갱신
+        try { if (typeof loadWinHistory === 'function') setTimeout(loadWinHistory, 0); } catch(_) {}
+      } catch (e) {
+        console.warn('❌ addCurrentWinSnapshot 실패:', e?.message);
+      }
+    }
+    
+    // 현재 카드 로더
+    function loadCurrentCard() {
+      // currentActiveTimeframe 사용 (timeframe select 요소보다 더 신뢰성 있음)
+      const interval = (window.currentActiveTimeframe || currentActiveTimeframe || 'minute10');
+      document.getElementById('ccInterval').textContent = interval;
+      
+      // 분봉 표시 업데이트
+      const timeframeMap = {
+        'minute1': '1m',
+        'minute3': '3m',
+        'minute5': '5m',
+        'minute10': '10m',
+        'minute15': '15m',
+        'minute30': '30m',
+        'minute60': '1h',
+        'day': '1D'
+      };
+      const displayTimeframe = timeframeMap[interval] || interval;
+      const ccTimeframeDisplay = document.getElementById('ccTimeframeDisplay');
+      if (ccTimeframeDisplay) {
+        ccTimeframeDisplay.textContent = displayTimeframe;
+      }
+      
+      // 현재 시간 업데이트
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('ko-KR');
+      document.getElementById('ccTimestamp').textContent = timeStr;
+      // 로딩 플래그 설정 (중복 호출 방지)
+      window.isLoadingCurrentCard = true;
+      
+      const url = `/api/nbverse/card?interval=${encodeURIComponent(interval)}&count=300&save=true`;
+      fetch(url).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }).then(j => {
+        if (!j || !j.ok) { throw new Error(j && j.error ? j.error : 'failed'); }
+        
+        // 현재 가격
+        document.getElementById('ccPrice').textContent = j.current_price != null ? j.current_price.toLocaleString() : '-';
+        
+        // 현재 거래량과 거래대금 계산 (chart 데이터의 마지막 값)
+        if (j.chart && j.chart.length > 0) {
+          const lastCandle = j.chart[j.chart.length - 1];
+          const currentVolume = lastCandle.volume || 0;
+          const currentTurnover = (j.current_price || 0) * currentVolume;
+          
+          // 거래량 표시 (8자리까지)
+          document.getElementById('ccVolume').textContent = 
+            currentVolume > 0 ? Number(currentVolume).toFixed(8) : '-';
+          
+          // 거래대금 표시 (정수 또는 소수점 2자리)
+          document.getElementById('ccTurnover').textContent = 
+            currentTurnover > 0 ? Number(currentTurnover).toLocaleString('ko-KR', {maximumFractionDigits: 0}) : '-';
+        }
+        
+        // N/B 값들
+        const nb = j.nb || {};
+        const price = nb.price || {};
+        const volume = nb.volume || {};
+        const turnover = nb.turnover || {};
+        const fmt = (v) => (v == null ? '-' : Number(v).toFixed(10));
+        
+        document.getElementById('ccPriceMax').textContent = fmt(price.max);
+        document.getElementById('ccPriceMin').textContent = fmt(price.min);
+        document.getElementById('ccVolMax').textContent = fmt(volume.max);
+        document.getElementById('ccVolMin').textContent = fmt(volume.min);
+        document.getElementById('ccTurnMax').textContent = fmt(turnover.max);
+        document.getElementById('ccTurnMin').textContent = fmt(turnover.min);
+        
+        // 저장할 현재 카드 데이터 전역 변수 저장
+        window.ccCurrentData = {
+          interval: interval,
+          timestamp: new Date().toISOString(),
+          current_price: j.current_price,
+          current_volume: j.chart && j.chart.length > 0 ? j.chart[j.chart.length - 1].volume : 0,
+          current_turnover: j.current_price * (j.chart && j.chart.length > 0 ? j.chart[j.chart.length - 1].volume : 0),
+          nb: {
+            price: { max: price.max, min: price.min, values: price.values || [] },
+            volume: { max: volume.max, min: volume.min, values: volume.values || [] },
+            turnover: { max: turnover.max, min: turnover.min, values: turnover.values || [] }
+          },
+          chart: j.chart || []
+        };
+        
+        // 저장 상태
+        const saveMeta = j.save && j.save.paths ? j.save.paths : null;
+        document.getElementById('ccSaveHint').textContent = saveMeta ? '✅ 완료' : '⏳ 대기';
+        
+        // 요약 그래프 그리기
+        if (price.values && price.values.length > 0) {
+          drawSummaryChart(price.values, volume.values, turnover.values);
+        }
+
+        // N/B Zone Status 표시 (비동기, 백그라운드)
+        fetchNBZoneStatus(interval);
+
+        // r기반 카드 코드/리그/그룹/SUPER 계산 및 표시
+        calculateAndDisplayCardRating({
+          priceMax: price.max,
+          priceMin: price.min,
+          volumeMax: volume.max,
+          volumeMin: volume.min,
+          amountMax: turnover.max,
+          amountMin: turnover.min
+        });
+        
+        // 현재 카드 렌더링 완료 → Win% 스냅샷 즉시 추가
+        setTimeout(() => {
+          try {
+            addCurrentWinSnapshot();
+          } catch (e) {
+            console.error('❌ addCurrentWinSnapshot 에러:', e);
+          }
+        }, 0);
+        
+        // 자동 저장: NBverse에 현재 카드 데이터 저장
+        autoSaveCurrentCard();
+        
+        console.log('✅ loadCurrentCard completed', j);
+      }).catch(err => {
+        document.getElementById('ccSaveHint').textContent = '❌ 오류';
+        console.error('loadCurrentCard error', err);
+        // 에러 시 기본값 표시
+        document.getElementById('ccPrice').textContent = '-';
+        document.getElementById('ccVolume').textContent = '-';
+        document.getElementById('ccTurnover').textContent = '-';
+        const zoneEl = document.getElementById('ccNBZone');
+        if (zoneEl) zoneEl.textContent = '⚠️ 조회 실패';
+      }).finally(() => {
+        window.isLoadingCurrentCard = false;
+      });
+    }
+    
+      // 현재 카드 자동 저장
+    function autoSaveCurrentCard() {
+      if (!window.ccCurrentData) return;
+      
+      try {
+        // postJson 함수 체크
+        if (typeof postJson !== 'function') {
+          // postJson이 없으면 fetch 직접 사용
+          fetch('/api/nbverse/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(window.ccCurrentData)
+          }).then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }).then(result => {
+            if (result && result.ok) {
+              console.log('✅ 자동 저장 완료:', window.ccCurrentData.interval);
+              try { window.ccLastNbversePath = result.path; } catch(_) {}
+            }
+          }).catch(err => {
+            console.warn('⚠️ 자동 저장 에러:', err.message);
+          });
+          return;
+        }
+        
+        // postJson 함수로 저장 시도
+        if (typeof postJson === 'function') {
+          postJson('/api/nbverse/save', window.ccCurrentData).then(result => {
+            if (result && result.ok) {
+              console.log('✅ 자동 저장 완료:', window.ccCurrentData.interval);
+              try { window.ccLastNbversePath = result.path; } catch(_) {}
+            } else {
+              console.warn('⚠️ 자동 저장 실패:', result?.error || 'Unknown');
+            }
+          }).catch(err => {
+            console.warn('⚠️ 자동 저장 에러:', err.message);
+          });
+        } else {
+          // postJson이 없으면 fetch 사용
+          fetch('/api/nbverse/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(window.ccCurrentData)
+          }).then(r => r.json()).then(result => {
+            if (result && result.ok) {
+              console.log('✅ 자동 저장 완료:', window.ccCurrentData.interval);
+              try { window.ccLastNbversePath = result.path; } catch(_) {}
+            } else {
+              console.warn('⚠️ 자동 저장 실패:', result?.error || 'Unknown');
+            }
+          }).catch(err => {
+            console.warn('⚠️ 자동 저장 에러:', err.message);
+          });
+        }
+      } catch (err) {
+        console.warn('⚠️ 자동 저장 중 오류:', err.message);
+      }
+    }
+    
+    // N/B Zone Status 조회 및 표시
+    function fetchNBZoneStatus(interval) {
+      const url = `/api/nbverse/zone?interval=${encodeURIComponent(interval)}`;
+
+      return fetch(url)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then(j => {
+          if (j && j.ok) {
+            const zoneEl = document.getElementById('ccNBZone');
+            const currentZone = j.current_zone || '-';
+            window.ccCurrentZone = currentZone; // 전역 변수에 저장
+            
+            if (zoneEl) {
+              const zoneLabel = currentZone === 'BLUE' ? '🔵 BLUE' : currentZone === 'ORANGE' ? '🟠 ORANGE' : '⚪ NONE';
+              const zoneCount = j.zone_count || '-';
+              const zoneColor = currentZone === 'BLUE' ? '#00d1ff' : currentZone === 'ORANGE' ? '#ffb703' : '#888888';
+
+              zoneEl.innerHTML = `
+                <div style="text-align: center;">
+                  <div style="font-size: 13px; font-weight: 700; color: ${zoneColor}; margin-bottom: 4px;">
+                    ${zoneLabel}
+                  </div>
+                  <div style="font-size: 10px; color: #d9e2f3;">지난 ${zoneCount || '?'}개 구간</div>
+                </div>
+              `;
+            }
+
+            console.log('✅ N/B Zone Status updated:', currentZone, j.zone_count);
+            return currentZone;
+          } else {
+            console.warn('⚠️ fetchNBZoneStatus failed:', j);
+            const zoneEl = document.getElementById('ccNBZone');
+            if (zoneEl) zoneEl.textContent = '데이터 없음';
+            return null;
+          }
+        })
+        .catch(err => {
+          console.error('fetchNBZoneStatus error', err);
+          const zoneEl = document.getElementById('ccNBZone');
+          if (zoneEl) zoneEl.textContent = '조회 중...';
+          return null;
+        });
+    }
+    
+    // 순수 계산기: N/B로 코드/리그/그룹/SUPER 계산
+    function computeCardCodeFS(params) {
+      const { priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin } = params || {};
+      if ([priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin].some(v => v == null || isNaN(Number(v)))) {
+        throw new Error('invalid params');
+      }
+
+      const toR = (max, min) => {
+        const mx = Number(max);
+        const mn = Number(min);
+        if (mx === 0) return 0; // 방어
+        // 변동폭 비율: (MAX - MIN) / MAX
+        // MAX가 크고 MIN이 작을수록 r이 큼 (등급 높음)
+        // MIN이 MAX에 가까우면 r이 작음 (등급 낮음)
+        return (mx - mn) / mx;
+      };
+
+      const rPrice = toR(priceMax, priceMin);
+      const rVol = toR(volumeMax, volumeMin);
+      const rAmt = toR(amountMax, amountMin);
+
+      const rToLetter = (r) => {
+        if (r >= 0.80) return 'S';
+        if (r >= 0.70) return 'A';
+        if (r >= 0.60) return 'B';
+        if (r >= 0.50) return 'C';
+        if (r >= 0.40) return 'D';
+        if (r >= 0.30) return 'E';
+        return 'F';
+      };
+
+      const pL = rToLetter(rPrice);
+      const vL = rToLetter(rVol);
+      const aL = rToLetter(rAmt);
+
+      const avgR = (rPrice + rVol + rAmt) / 3;
+      const sign = avgR >= 0.65 ? '+' : (avgR <= 0.45 ? '-' : '');
+      const code = `${pL}${vL}${aL}${sign}`;
+
+      const letterPts = { F:0, E:1, D:2, C:3, B:4, A:5, S:6 };
+      const avgPtsRaw = (letterPts[pL] + letterPts[vL] + letterPts[aL]) / 3;
+      const avgPts = avgPtsRaw + (sign === '+' ? 0.25 : (sign === '-' ? -0.25 : 0));
+
+      const league = (() => {
+        if (avgPts < 2.0) return '브론즈';
+        if (avgPts < 3.0) return '실버';
+        if (avgPts < 4.0) return '골드';
+        if (avgPts < 5.0) return '플래티넘';
+        if (avgPts < 5.75) return '다이아';
+        return '첼린저';
+      })();
+
+      const group = avgPts < 2.5 ? 'EASY' : (avgPts < 4.5 ? 'NORMAL' : 'HARD');
+
+      const countAS = [pL, vL, aL].filter(ch => ch === 'A' || ch === 'S').length;
+      const countS = [pL, vL, aL].filter(ch => ch === 'S').length;
+      const isSuper = (countS >= 2) || (avgPts >= 5.5) || (sign === '+' && countAS >= 2);
+
+      // 강화: r 값(0~1 범위)의 평균을 1~99강으로 매핑
+      // avgR이 높을수록 (변동폭이 클수록) 강화 수치가 높아짐
+      // avgR: 0 → 1강, avgR: 1 → 99강
+      const enhancement = Math.min(99, Math.max(1, Math.floor(avgR * 98) + 1));
+
+      // 색상: 기호에 맞춰 강조
+      const color = sign === '+' ? '#00d1ff' : (sign === '-' ? '#ffb703' : '#e6eefc');
+
+      return { code, league, group, super: isSuper, avgR, avgPts, color, enhancement };
+    }
+
+    // ML 등급 요청
+    function requestMlRating(cardPayload, onDone) {
+      try {
+        fetch('/api/ml/rating/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: cardPayload })
+        }).then(r => r.json()).then(res => {
+          if (res && res.ok && typeof onDone === 'function') {
+            onDone(res);
+          }
+        }).catch(() => {});
+      } catch (_) {}
+    }
+
+    // 카드 코드/리그/그룹/SUPER 계산 및 표시 (현재 카드 전용 렌더러)
+    function calculateAndDisplayCardRating(params) {
+      try {
+        const res = computeCardCodeFS(params);
+        const ratingDisplay = document.getElementById('ccRatingDisplay');
+        const ratingScore = document.getElementById('ccRatingScore');
+        const ratingSection = document.getElementById('ccRatingSection');
+        if (ratingDisplay && ratingScore && ratingSection) {
+          ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+          ratingScore.innerHTML = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''}`;
+          ratingSection.style.background = `linear-gradient(135deg, rgba(0,0,0,0.3), ${res.color}22)`;
+          ratingSection.style.borderColor = `${res.color}44`;
+        }
+        window.ccCurrentRating = res;
+        console.log('✅ Card code computed:', res);
+
+        // ML 등급 요청 (현재 카드)
+        if (window.ccCurrentData) {
+          requestMlRating(window.ccCurrentData, (ml) => {
+            window.ccCurrentRating.mlGrade = ml.grade;
+            window.ccCurrentRating.mlEnhancement = ml.enhancement;
+            if (ratingDisplay && ratingScore) {
+              ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+              ratingScore.innerHTML = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''} | ML ${ml.grade} +${ml.enhancement}강`;
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('calculateAndDisplayCardRating failed:', e?.message);
+      }
+    }
+    
+    // 요약 그래프 그리기
+    function drawSummaryChart(priceValues, volumeValues, turnoverValues) {
+      const ctx = document.getElementById('ccSummaryChart');
+      if (!ctx) return;
+      
+      // 최대 15개 포인트로 간단히 표시
+      const step = Math.max(1, Math.ceil(priceValues.length / 15));
+      const labels = Array.from({length: Math.ceil(priceValues.length / step)}, (_, i) => '');
+      const priceSample = priceValues.filter((_, i) => i % step === 0);
+      const volumeSample = (volumeValues || []).filter((_, i) => i % step === 0);
+      
+      // 정규화 (0~1 범위)
+      const normalize = (arr) => {
+        if (!arr || arr.length === 0) return [];
+        const vals = arr.filter(v => v != null);
+        if (vals.length === 0) return arr.map(() => 0);
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const range = max - min || 1;
+        return arr.map(v => v == null ? 0 : (v - min) / range);
+      };
+      
+      const normalizedPrice = normalize(priceSample);
+      const normalizedVol = normalize(volumeSample);
+      
+      // 기존 차트 제거
+      if (ccSummaryChart) {
+        ccSummaryChart.destroy();
+      }
+      
+      // 새 차트 생성
+      ccSummaryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '가격',
+              data: normalizedPrice,
+              borderColor: '#00d1ff',
+              backgroundColor: 'rgba(0,209,255,0.15)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3,
+              pointRadius: 1,
+              pointHoverRadius: 2,
+              pointBackgroundColor: '#00d1ff',
+              yAxisID: 'y'
+            },
+            {
+              label: '거래량',
+              data: normalizedVol,
+              borderColor: '#0ecb81',
+              backgroundColor: 'transparent',
+              borderWidth: 1,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0.5,
+              pointBackgroundColor: '#0ecb81',
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: {
+            duration: 300
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              enabled: true,
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              titleColor: '#ffffff',
+              bodyColor: '#e6eefc',
+              borderColor: 'rgba(255,255,255,0.2)',
+              borderWidth: 1,
+              padding: 6,
+              displayColors: true,
+              titleFont: { size: 10 },
+              bodyFont: { size: 9 }
+            }
+          },
+          scales: {
+            y: {
+              type: 'linear',
+              display: false,
+              position: 'left',
+              min: 0,
+              max: 1
+            },
+            y1: {
+              type: 'linear',
+              display: false,
+              position: 'right',
+              min: 0,
+              max: 1
+            },
+            x: {
+              display: false,
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 매수 카드 미니 차트 (개별 캔버스)
+    function drawBuyMiniChart(canvasId, priceValues, volumeValues) {
+      const ctx = document.getElementById(canvasId);
+      if (!ctx || !priceValues || priceValues.length === 0) return;
+
+      const step = Math.max(1, Math.ceil(priceValues.length / 20));
+      const labels = Array.from({length: Math.ceil(priceValues.length / step)}, () => '');
+      const priceSample = priceValues.filter((_, i) => i % step === 0);
+      const volumeSample = (volumeValues || []).filter((_, i) => i % step === 0);
+
+      const normalize = (arr) => {
+        if (!arr || arr.length === 0) return [];
+        const vals = arr.filter(v => v != null);
+        if (vals.length === 0) return arr.map(() => 0);
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const range = max - min || 1;
+        return arr.map(v => v == null ? 0 : (v - min) / range);
+      };
+
+      const p = normalize(priceSample);
+      const v = normalize(volumeSample);
+
+      // 차트 인스턴스 관리 및 파괴
+      window._buyCharts = window._buyCharts || {};
+      if (window._buyCharts[canvasId]) {
+        try { window._buyCharts[canvasId].destroy(); } catch (_) {}
+      }
+
+      window._buyCharts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { data: p, borderColor: '#00d1ff', backgroundColor: 'rgba(0,209,255,0.15)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 0 },
+            { data: v, borderColor: '#0ecb81', backgroundColor: 'transparent', borderWidth: 1, fill: false, tension: 0.3, pointRadius: 0 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: { x: { display: false }, y: { display: false } },
+          animation: { duration: 200 }
+        }
+      });
+    }
+    
+    // Debounce timer for preventing rapid updates (1개씩만)
+    let currentCardTimeout = null;
+    
+    function loadCurrentCardDebounced() {
+      if (currentCardTimeout) clearTimeout(currentCardTimeout);
+      currentCardTimeout = setTimeout(() => {
+        loadCurrentCard();
+        currentCardTimeout = null;
+      }, 300); // 300ms debounce
+    }
+    
+    // 전역 window 객체에도 할당
+    window.loadCurrentCard = loadCurrentCard;
+    window.loadCurrentCardDebounced = loadCurrentCardDebounced;
+    
+    // timeframe 변경 시 현재 카드 업데이트 (debounce 적용)
+    function onTimeframeChange() {
+      console.log('🕐 Timeframe changed, updating current card...');
+            // 상단 select의 값으로 currentActiveTimeframe 업데이트
+            const sel = document.getElementById('timeframe');
+            if (sel) {
+              currentActiveTimeframe = sel.value;
+              window.currentActiveTimeframe = sel.value;
+            }
+      loadCurrentCardDebounced();
+    }
+    window.onTimeframeChange = onTimeframeChange;
+
+    // 거래 로그 추가 함수
+    function addTradeLog(message, type = 'info') {
+      const logList = document.getElementById('tradeLogList');
+      if (!logList) return;
+      
+      // 초기 "로그가 없습니다" 메시지 제거
+      const emptyMsg = logList.querySelector('.text-center.text-muted');
+      if (emptyMsg) emptyMsg.remove();
+      
+      const logEntry = document.createElement('div');
+      logEntry.style.cssText = 'padding: 8px; margin-bottom: 6px; border-radius: 4px; border-left: 3px solid;';
+      
+      const now = new Date().toLocaleTimeString('ko-KR');
+      
+      if (type === 'success') {
+        logEntry.style.backgroundColor = 'rgba(14, 203, 129, 0.1)';
+        logEntry.style.borderLeftColor = '#0ecb81';
+        logEntry.innerHTML = `<div style="color: #0ecb81; font-weight: 600;">[${now}] ✅ ${message}</div>`;
+      } else if (type === 'error') {
+        logEntry.style.backgroundColor = 'rgba(246, 70, 93, 0.1)';
+        logEntry.style.borderLeftColor = '#f6465d';
+        logEntry.innerHTML = `<div style="color: #f6465d; font-weight: 600;">[${now}] ❌ ${message}</div>`;
+      } else {
+        logEntry.style.backgroundColor = 'rgba(230, 238, 252, 0.05)';
+        logEntry.style.borderLeftColor = '#6c757d';
+        logEntry.innerHTML = `<div style="color: #e6eefc;">[${now}] ${message}</div>`;
+      }
+      
+      logList.insertBefore(logEntry, logList.firstChild);
+      
+      // 최대 50개 로그만 유지
+      while (logList.children.length > 50) {
+        logList.removeChild(logList.lastChild);
+      }
+    }
+    window.addTradeLog = addTradeLog;
+
+    // 초기화 함수 (동적 로드에서도 실행 가능하도록)
+    function initCustomDashboard() {
+      console.log('🎯 Initializing Custom Dashboard...');
+      
+      const refreshBtn = document.getElementById('ccRefresh');
+      if (refreshBtn) refreshBtn.addEventListener('click', loadCurrentCard);
+      
+      const saveBtn = document.getElementById('ccSave');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', async ()=>{
+          try {
+            const saveHint = document.getElementById('ccSaveHint');
+            if (!window.ccCurrentData) {
+              addTradeLog('저장할 데이터가 없습니다. 먼저 새로고침하세요.', 'error');
+              return;
+            }
+            
+            saveHint.textContent = '저장 중...';
+            saveHint.style.color = '#4285f4';
+            
+            console.log('💾 NBverse 데이터 저장:', window.ccCurrentData);
+            
+            // postJson 함수로 저장
+            if (typeof postJson === 'function') {
+              const result = await postJson('/api/nbverse/save', window.ccCurrentData);
+              if (result && result.ok) {
+                saveHint.textContent = '✅ 저장 완료';
+                saveHint.style.color = '#0ecb81';
+                addTradeLog('현재 카드 데이터가 NBverse에 저장되었습니다.', 'success');
+                console.log('✅ NBverse 저장 완료:', result);
+              } else {
+                saveHint.textContent = '❌ 저장 실패';
+                saveHint.style.color = '#f6465d';
+                addTradeLog(`NBverse 저장 실패: ${result?.error || 'Unknown'}`, 'error');
+              }
+            } else {
+              // postJson이 없으면 fetch 사용
+              const response = await fetch('/api/nbverse/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(window.ccCurrentData)
+              });
+              const result = await response.json();
+              if (result && result.ok) {
+                saveHint.textContent = '✅ 저장 완료';
+                saveHint.style.color = '#0ecb81';
+                addTradeLog('현재 카드 데이터가 NBverse에 저장되었습니다.', 'success');
+              } else {
+                saveHint.textContent = '❌ 저장 실패';
+                saveHint.style.color = '#f6465d';
+                addTradeLog(`NBverse 저장 실패: ${result?.error || 'Unknown'}`, 'error');
+              }
+            }
+          } catch (err) {
+            console.error('NBverse 저장 에러:', err);
+            document.getElementById('ccSaveHint').textContent = '❌ 에러';
+            document.getElementById('ccSaveHint').style.color = '#f6465d';
+            addTradeLog(`NBverse 저장 중 오류 발생: ${err.message}`, 'error');
+          }
+        });
+      }
+      
+      const tradeLogRefreshBtn = document.getElementById('tradeLogRefresh');
+      if (tradeLogRefreshBtn) {
+        tradeLogRefreshBtn.addEventListener('click', ()=>{
+          const logList = document.getElementById('tradeLogList');
+          if (logList) {
+            logList.innerHTML = '<div class="text-center text-muted py-2">로그가 없습니다</div>';
+            addTradeLog('거래 로그가 초기화되었습니다.', 'info');
+          }
+        });
+      }
+      
+      const ccBuyBtn = document.getElementById('ccBuy');
+      if (ccBuyBtn) {
+        ccBuyBtn.addEventListener('click', async ()=>{
+          try {
+            const ccAmount = document.getElementById('ccBuyAmount');
+            const buyAmount = ccAmount ? Number(ccAmount.value) : 5000;
+            
+            console.log('🛒 현재 카드 매수 시작:', buyAmount, 'KRW');
+            addTradeLog(`현재 카드 매수 시작 (${buyAmount.toLocaleString()} KRW)`, 'info');
+            
+            // Use the same postJson function from ui.js
+            if (typeof postJson !== 'function') {
+              const errMsg = 'postJson 함수를 찾을 수 없습니다. ui.js가 로드되었는지 확인하세요.';
+              addTradeLog(errMsg, 'error');
+              console.error(errMsg);
+              return;
+            }
+            
+            // Call buy API with krw parameter (not amount)
+            const payload = { krw: buyAmount, force: true };
+            if (window.ccLastNbversePath) payload.nbverse_path = window.ccLastNbversePath;
+            if (window.ccCurrentData && window.ccCurrentData.interval) payload.nbverse_interval = window.ccCurrentData.interval;
+            if (window.ccCurrentData && window.ccCurrentData.timestamp) payload.nbverse_timestamp = window.ccCurrentData.timestamp;
+            const result = await postJson('/api/trade/buy', payload);
+            
+            if (result && result.ok && result.order) {
+              console.log('✅ 매수 성공:', result.order);
+              const price = Number(result.order.price||0).toLocaleString();
+              const size = Number(result.order.size||0).toFixed(6);
+              const paperMode = result.order.paper ? ' [PAPER]' : '';
+              addTradeLog(`매수 완료! 가격: ${price} KRW / 수량: ${size}${paperMode}`, 'success');
+              
+              // 즉시 UI 반영을 위해 로컬 캐시에 주문 추가 (서버 /api/orders 대기 없이 표시)
+              try {
+                const cached = JSON.parse(localStorage.getItem('cachedOrders') || '[]');
+                const newOrder = {
+                  ts: result.order.ts || Date.now(),
+                  time: result.order.ts || Date.now(),
+                  side: result.order.side || 'BUY',
+                  price: Number(result.order.price || 0),
+                  size: Number(result.order.size || 0),
+                  paper: !!result.order.paper,
+                  market: result.order.market || 'KRW-BTC',
+                  // 현재 카드 전체 스냅샷을 주문 객체에 직접 포함 (모든 N/B, 그래프, Zone 포함)
+                  snapshot: window.ccCurrentData ? JSON.parse(JSON.stringify(window.ccCurrentData)) : null,
+                  nbverse_path: result.order.nbverse_path || window.ccLastNbversePath || null
+                };
+                console.log('💾 매수 주문 저장:', newOrder);
+                console.log('📸 스냅샷 포함 여부:', !!newOrder.snapshot);
+                cached.unshift(newOrder);
+                localStorage.setItem('cachedOrders', JSON.stringify(cached.slice(0, 200)));
+                console.log('✅ 캐시 저장 완료, 총', cached.length, '개 주문');
+
+                // 현재 카드 스냅샷을 주문과 연결해 저장
+                if (window.ccCurrentData) {
+                  const snapKey = 'orderCardSnapshots';
+                  let snaps = {};
+                  try { snaps = JSON.parse(localStorage.getItem(snapKey) || '{}'); } catch(_) { snaps = {}; }
+                  const key = String(newOrder.ts);
+                  snaps[key] = window.ccCurrentData;
+                  localStorage.setItem(snapKey, JSON.stringify(snaps));
+                }
+              } catch (_) {}
+              
+              // Refresh trade stats and balance
+              if (typeof loadTradeStats === 'function') setTimeout(loadTradeStats, 500);
+              if (typeof refreshAssets === 'function') setTimeout(refreshAssets, 1000);
+            } else {
+              const error = result?.error || '알 수 없는 오류';
+              const details = result?.current_nb_coins !== undefined 
+                ? `(현재 보유: ${result.current_nb_coins}개, 최대: ${result.max_allowed}개)`
+                : '';
+              console.warn('⚠️ 매수 불가:', error, details);
+              addTradeLog(`매수 불가: ${error} ${details}`, 'error');
+            }
+          } catch (err) {
+            console.error('매수 에러:', err);
+            addTradeLog(`매수 중 오류 발생: ${err.message}`, 'error');
+          }
+        });
+      }
+      
+      const sel = document.getElementById('timeframe');
+      if (sel) {
+        sel.addEventListener('change', onTimeframeChange);
+      }
+      // 초기 로드
+      // 초기 분봉 설정
+      if (sel && sel.value) {
+        currentActiveTimeframe = sel.value;
+        window.currentActiveTimeframe = sel.value;
+      }
+      loadCurrentCard();
+      
+      console.log('✅ Custom Dashboard initialized');
+    }
+    
+    // NBverse Zone Display 업데이트 함수 (ui.js에서 호출)
+    function updateCurrentZoneDisplay(zone) {
+      const zoneEl = document.getElementById('ccNBZone');
+      if (!zoneEl) return;
+      
+      const zoneLabel = zone === 'BLUE' ? '🔵 BLUE' : zone === 'ORANGE' ? '🟠 ORANGE' : '⚪ NONE';
+      const zoneColor = zone === 'BLUE' ? '#00d1ff' : zone === 'ORANGE' ? '#ffb703' : '#888888';
+      
+      zoneEl.innerHTML = `
+        <div style="text-align: center;">
+          <div style="font-size: 13px; font-weight: 700; color: ${zoneColor}; margin-bottom: 4px;">
+            ${zoneLabel}
+          </div>
+        </div>
+      `;
+      console.log('✅ Zone Display updated:', zone);
+    }
+    window.updateCurrentZoneDisplay = updateCurrentZoneDisplay;
+    window.initCustomDashboard = initCustomDashboard;
+    
+    // Auto Buy Config module (encapsulated)
+    const AutoBuyConfig = (() => {
+      const els = {};
+      let isRunning = false;
+      const STORAGE_KEY = 'autoBuyState';
+      
+      function cache() {
+        els.interval = document.getElementById('abInterval');
+        els.startBtn = document.getElementById('abStartBtn');
+        els.stopBtn = document.getElementById('abStopBtn');
+      }
+      
+      function saveState() {
+        try {
+          const state = {
+            isRunning,
+            interval: els.interval?.value || '',
+            timestamp: Date.now()
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+          console.error('Failed to save auto-buy state', e);
+        }
+      }
+      
+      function loadState() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const state = JSON.parse(saved);
+            // 5분 이내의 상태만 복원
+            if (Date.now() - state.timestamp < 300000) {
+              return state;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load auto-buy state', e);
+        }
+        return null;
+      }
+      
+      async function load() {
+        try {
+          const res = await fetch('/api/auto-buy/config');
+          const data = await res.json();
+          const cfg = data.config || data; // API returns { ok, config }
+          const intervals = cfg.intervals || [];
+          
+          // 서버 상태 우선, 없으면 로컬 상태 복원
+          isRunning = !!cfg.enabled;
+          
+          if (els.interval) {
+            if (intervals.length > 0) {
+              els.interval.value = intervals[0];
+            } else {
+              // 로컬 상태 복원 시도
+              const savedState = loadState();
+              if (savedState && savedState.interval) {
+                els.interval.value = savedState.interval;
+              }
+            }
+          }
+          
+          console.log('✅ Auto-buy config loaded:', { enabled: cfg.enabled, intervals, isRunning });
+          updateButtonStates();
+          saveState();
+        } catch (e) {
+          console.error('Failed to load auto-buy config', e);
+          // API 실패 시 로컬 상태 복원
+          const savedState = loadState();
+          if (savedState) {
+            if (els.interval) els.interval.value = savedState.interval;
+            isRunning = savedState.isRunning;
+            updateButtonStates();
+          }
+        }
+      }
+      
+      async function start() {
+        try {
+          const interval = els.interval?.value;
+          
+          if (!interval) {
+            alert('체크 간격을 선택해주세요.');
+            return;
+          }
+          
+          const body = { enabled: true, cooldown_sec: 0, intervals: [interval] };
+          console.log('🚀 Starting auto-buy:', body);
+          const res = await fetch('/api/auto-buy/config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error('Bad status ' + res.status);
+          const j = await res.json();
+          console.log('✅ Auto-buy started:', j);
+          isRunning = true;
+          saveState();
+          updateButtonStates();
+          // 즉시 상태 갱신
+          AutoBuyStatus.refresh();
+        } catch (e) {
+          console.error('Failed to start auto-buy', e);
+          alert('자동 매수 시작 실패: ' + e.message);
+        }
+      }
+      
+      async function stop() {
+        try {
+          const interval = els.interval?.value || '';
+          const body = { enabled: false, cooldown_sec: 0, intervals: interval ? [interval] : [] };
+          console.log('🛑 Stopping auto-buy:', body);
+          const res = await fetch('/api/auto-buy/config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error('Bad status ' + res.status);
+          const j = await res.json();
+          console.log('✅ Auto-buy stopped:', j);
+          isRunning = false;
+          saveState();
+          updateButtonStates();
+          // 즉시 상태 갱신
+          AutoBuyStatus.refresh();
+        } catch (e) {
+          console.error('Failed to stop auto-buy', e);
+          alert('자동 매수 중지 실패: ' + e.message);
+        }
+      }
+      
+      function updateButtonStates() {
+        if (els.startBtn) {
+          els.startBtn.disabled = isRunning;
+          els.startBtn.style.opacity = isRunning ? '0.5' : '1';
+          els.startBtn.style.cursor = isRunning ? 'not-allowed' : 'pointer';
+        }
+        if (els.stopBtn) {
+          els.stopBtn.disabled = !isRunning;
+          els.stopBtn.style.opacity = !isRunning ? '0.5' : '1';
+          els.stopBtn.style.cursor = !isRunning ? 'not-allowed' : 'pointer';
+        }
+        if (els.interval) {
+          els.interval.disabled = isRunning;
+        }
+      }
+      
+      function bind() {
+        if (els.startBtn) els.startBtn.addEventListener('click', start);
+        if (els.stopBtn) els.stopBtn.addEventListener('click', stop);
+      }
+      
+      function init() { cache(); bind(); load(); }
+      return { init, load, start, stop };
+    })();
+    
+    // Auto Buy Status module (polls server for heartbeat and cooldowns)
+    const AutoBuyStatus = (() => {
+      let timer = null;
+      let localTimer = null;
+      let serverSyncTime = 0; // 서버와 동기화된 기준 시간
+      let clientSyncTime = 0; // 클라이언트 기준 시간
+      let intervalSeconds = 60;
+      let isEnabled = false;
+      
+      const el = {
+        bar: null, status: null, next: null, progressText: null
+      };
+      const ivLabel = (iv) => ({
+        minute1:'1분', minute3:'3분', minute5:'5분', minute10:'10분', minute15:'15분', minute30:'30분', minute60:'1시간', minute120:'2시간', minute240:'4시간', minute360:'6시간', minute480:'8시간', day:'1일'
+      })[iv] || iv;
+      
+      const ivToSeconds = (iv) => {
+        const match = iv.match(/minute(\d+)/);
+        if (match) return parseInt(match[1]) * 60;
+        if (iv === 'day') return 1440 * 60;
+        return 60;
+      };
+      
+      function cache() {
+        el.bar = document.getElementById('abProgressBar');
+        el.status = document.getElementById('abStatusText');
+        el.next = document.getElementById('abNextText');
+        el.progressText = document.getElementById('abProgressText');
+      }
+      
+      function setBar(pct, text) {
+        if (el.bar) el.bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+        if (el.progressText) el.progressText.textContent = text || '';
+      }
+      
+      function updateLocalTimer() {
+        if (!isEnabled || serverSyncTime === 0) {
+          setBar(0, '-');
+          return;
+        }
+        
+        // 서버 동기화 시간 기준으로 경과 시간 계산
+        const clientNow = Date.now();
+        const elapsedMs = clientNow - clientSyncTime;
+        const serverNow = serverSyncTime + Math.floor(elapsedMs / 1000);
+        
+        const lastPoll = serverNow - (serverNow % intervalSeconds);
+        const nextPoll = lastPoll + intervalSeconds;
+        const remaining = Math.max(0, nextPoll - serverNow);
+        const elapsed = intervalSeconds - remaining;
+        const pct = (elapsed / intervalSeconds) * 100;
+        
+        const minutes = Math.floor(remaining / 60);
+        const seconds = remaining % 60;
+        const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        
+        setBar(pct, timeText);
+      }
+      
+      async function tick() {
+        try {
+          const res = await fetch('/api/auto-buy/status');
+          const s = await res.json();
+          isEnabled = !!s.enabled;
+          const serverTime = Number(s.server_time || 0);
+          const lastPoll = Number(s.last_poll_ts || 0);
+          const ivs = Array.isArray(s.intervals) ? s.intervals : [];
+          
+          // 서버 시간 동기화
+          serverSyncTime = serverTime;
+          clientSyncTime = Date.now();
+          
+          if (ivs.length > 0) {
+            intervalSeconds = ivToSeconds(ivs[0]);
+          }
+          
+          const elapsed = Math.max(0, serverTime - lastPoll);
+          const remain = Math.max(0, intervalSeconds - elapsed);
+          const pct = Math.min(100, Math.max(0, (elapsed / intervalSeconds) * 100));
+          
+          if (el.status) {
+            el.status.textContent = isEnabled ? '▶ 실행 중' : '⏸ 중지됨';
+            el.status.style.color = isEnabled ? '#00d1ff' : '#9aa8c2';
+          }
+          
+          if (isEnabled && ivs.length > 0) {
+            const minutes = Math.floor(remain / 60);
+            const seconds = remain % 60;
+            const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+            setBar(pct, timeText);
+            if (el.next) el.next.textContent = `${ivLabel(ivs[0])} 간격`;
+          } else {
+            serverSyncTime = 0;
+            clientSyncTime = 0;
+            intervalSeconds = 60;
+            setBar(0, '-');
+            if (el.next) el.next.textContent = '-';
+          }
+        } catch (e) {
+          console.error('Failed to fetch auto-buy status', e);
+          serverSyncTime = 0;
+          clientSyncTime = 0;
+          isEnabled = false;
+          setBar(0, '-');
+          if (el.status) {
+            el.status.textContent = '⚠ 오류';
+            el.status.style.color = '#ff4757';
+          }
+          if (el.next) el.next.textContent = '-';
+        }
+      }
+      
+      function stop() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+        if (localTimer) {
+          clearInterval(localTimer);
+          localTimer = null;
+        }
+      }
+      
+      function start() {
+        stop(); // 기존 타이머 정리
+        
+        timer = setInterval(tick, 3000); // 3초마다 서버 동기화
+        localTimer = setInterval(updateLocalTimer, 500); // 0.5초마다 UI 업데이트
+        tick(); // 즉시 실행
+      }
+      
+      function refresh() {
+        tick(); // 즉시 상태 갱신
+      }
+      
+      function init() { 
+        cache(); 
+        start(); 
+      }
+      
+      return { init, refresh, stop };
+    })();
+    
+    document.addEventListener('DOMContentLoaded', () => { AutoBuyConfig.init(); AutoBuyStatus.init(); });
+    
+    // DOMContentLoaded 또는 즉시 실행
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCustomDashboard);
+    } else {
+      // 이미 로드된 경우 즉시 실행
+      setTimeout(initCustomDashboard, 100);
+    }
+    
+    // 거래 통계 로더
+    async function loadTradeStats() {
+      try {
+        const now = new Date().toLocaleTimeString('ko-KR');
+        document.getElementById('buyStatsTime').textContent = now;
+        document.getElementById('sellStatsTime').textContent = now;
+        
+        // 파일에서 매수/매도 카드 로드
+        let buyOrders = [];
+        let sellOrders = [];
+        
+        try {
+          const buyRes = await fetch('/api/cards/buy');
+          const buyData = await buyRes.json();
+          if (buyData && buyData.ok) {
+            buyOrders = buyData.cards || [];
+          }
+        } catch (e) {
+          console.error('Failed to load buy cards:', e);
+          // 캐시에서 복원
+          try {
+            const cachedBuyOrders = localStorage.getItem('buyOrdersCache');
+            if (cachedBuyOrders) {
+              buyOrders = JSON.parse(cachedBuyOrders);
+              console.log('💾 캐시에서 매수 카드 복원:', buyOrders.length, '개');
+            }
+          } catch (_) {}
+        }
+        
+        try {
+          const sellRes = await fetch('/api/cards/sell');
+          const sellData = await sellRes.json();
+          if (sellData && sellData.ok) {
+            sellOrders = sellData.cards || [];
+          }
+        } catch (e) {
+          console.error('Failed to load sell cards:', e);
+        }
+
+        // 자동 ML 학습 트리거 (서버가 sell 카드로 학습)
+        try {
+          fetch('/api/ml/rating/train', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ auto: true }) 
+          })
+            .then(async r => {
+              // 모든 상태를 정상으로 처리 (400은 학습 데이터 부족, 정상)
+              if (r.status === 400) {
+                console.log('🤖 ML 학습 대기 중 (학습 데이터 수집 중...)');
+                return null;
+              }
+              if (!r.ok) {
+                console.log('🤖 ML 학습 응답:', `상태 ${r.status}`);
+                return null;
+              }
+              return r.json();
+            })
+            .then(r => {
+              if (r && r.ok) {
+                console.log('🤖 ML 학습 완료:', r);
+              }
+            })
+            .catch(e => {
+              // 네트워크 오류만 로그 (상태 오류는 위에서 처리됨)
+              console.debug('🤖 ML 학습 요청 상태:', e.message);
+            });
+        } catch(_) {}
+        
+        console.log('📊 loadTradeStats: 총', buyOrders.length + sellOrders.length, '개 카드, 매수', buyOrders.length, '개, 매도', sellOrders.length, '개');
+
+        // 판매 실현 손익 계산 (FIFO 매칭)
+        const sortedBuys = [...buyOrders].sort((a, b) => Number(a.time || a.ts || 0) - Number(b.time || b.ts || 0));
+        const sortedSells = [...sellOrders].sort((a, b) => Number(a.time || a.ts || 0) - Number(b.time || b.ts || 0));
+        const buyQueue = sortedBuys.map(o => ({
+          size: Number(o.size || 0),
+          price: Number(o.price || 0)
+        }));
+        let realizedTotal = 0;
+        let realizedMax = 0;
+        let realizedCount = 0;
+        sortedSells.forEach(sell => {
+          let remain = Number(sell.size || 0);
+          const sellPrice = Number(sell.price || 0);
+          let sellProfit = 0;
+          while (remain > 0 && buyQueue.length > 0) {
+            const buy = buyQueue[0];
+            const qty = Math.min(remain, buy.size);
+            sellProfit += (sellPrice - buy.price) * qty;
+            buy.size -= qty;
+            remain -= qty;
+            if (buy.size <= 0.00000001) buyQueue.shift();
+          }
+          // 남은 수량(초과 매도)은 원가 0으로 처리
+          if (remain > 0) {
+            sellProfit += (sellPrice * remain);
+            remain = 0;
+          }
+          realizedTotal += sellProfit;
+          realizedMax = Math.max(realizedMax, sellProfit);
+          realizedCount += 1;
+        });
+        const realizedAvg = realizedCount > 0 ? (realizedTotal / realizedCount) : 0;
+
+        // 전체 주문 모음 (로그/가격 참고)
+        const allOrders = [...buyOrders, ...sellOrders];
+
+        // 매수/매도 로그 (최신순)
+        const logEl = document.getElementById('tradeLogList');
+        if (logEl) {
+          const ordered = allOrders.sort((a, b) => (Number(b.time || b.ts || 0) - Number(a.time || a.ts || 0)));
+          if (ordered.length > 0) {
+            logEl.innerHTML = ordered.slice(0, 30).map(o => {
+              const isBuy = (o.side === 'bid' || o.side === 'BUY');
+              const price = Number(o.price || 0).toLocaleString();
+              const size = Number(o.size || 0).toFixed(6);
+              const time = o.time ? new Date(o.time).toLocaleTimeString('ko-KR') : (o.ts ? new Date(o.ts).toLocaleTimeString('ko-KR') : '-');
+              const paper = o.paper ? '[PAPER]' : '';
+              const sideBadge = isBuy ? '<span style="color:#0ecb81; font-weight:700;">BUY</span>' : '<span style="color:#f6465d; font-weight:700;">SELL</span>';
+              return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>${sideBadge} <span style="color:#9aa8c2;">${time}</span></div>
+                  <div style="color:${isBuy ? '#0ecb81' : '#f6465d'}; font-weight:600;">${price} KRW</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:#9aa8c2;">
+                  <span>${size} ${o.market || 'BTC'} ${paper}</span>
+                  <span>${(Number(o.price || 0) * Number(o.size || 0)).toFixed(0).toLocaleString()} KRW</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            logEl.innerHTML = '<div class="text-center text-muted py-2">로그가 없습니다</div>';
+          }
+        }
+        
+        // 매수 통계
+        document.getElementById('buyCount').textContent = buyOrders.length;
+        const buyTotal = buyOrders.reduce((sum, o) => sum + (Number(o.price || 0) * Number(o.size || 0)), 0);
+        const buyAvg = buyOrders.length > 0 ? buyTotal / buyOrders.length : 0;
+
+        // 매도 통계(선 계산: 손익 계산에서도 활용)
+        const sellTotal = sellOrders.reduce((sum, o) => sum + (Number(o.price || 0) * Number(o.size || 0)), 0);
+        const sellAvg = sellOrders.length > 0 ? sellTotal / sellOrders.length : 0;
+
+        // 현재가 추출 (캔들 캐시 → 최근 주문 가격 순)
+        let lastPrice = 0;
+        try {
+          const lastCandle = (window.candleDataCache || []).slice(-1)[0];
+          lastPrice = Number(lastCandle?.close || lastCandle?.value || 0) || 0;
+        } catch (_) { lastPrice = 0; }
+        if (!lastPrice && allOrders.length > 0) {
+          lastPrice = Number(allOrders[0].price || 0) || 0;
+        }
+
+        // 보유 수량/잔존 원가/현재 손익 계산 (단순 계산: 매수 원가 - 매도 금액을 잔존 원가로 간주)
+        const buySizeTotal = buyOrders.reduce((sum, o) => sum + Number(o.size || 0), 0);
+        const sellSizeTotal = sellOrders.reduce((sum, o) => sum + Number(o.size || 0), 0);
+        const netSize = buySizeTotal - sellSizeTotal;
+        const remainingCost = Math.max(0, buyTotal - sellTotal);
+        const currentValue = netSize > 0 ? (lastPrice * netSize) : 0;
+        
+        // 수수료 계산 (매수: 0.1%, 매도: 0.1%)
+        const buyFee = buyTotal * 0.001; // 매수 수수료
+        const sellFee = sellTotal * 0.001; // 매도 수수료
+        const totalFees = buyFee + sellFee;
+        
+        // 미실현 손익 = 현재 시가 - (매수 원가 + 매수 수수료) - 미실현 수수료
+        const unrealizedFeeAdjustment = netSize > 0 ? (currentValue * 0.001) : 0; // 매도 시 예상 수수료
+        const unrealized = currentValue - remainingCost - buyFee - unrealizedFeeAdjustment;
+        const unrealizedRate = remainingCost > 0 ? (unrealized / remainingCost) * 100 : 0;
+
+        // 현재 카드에 실현 손익 반영
+        const ccRealizedAvgEl = document.getElementById('ccRealizedAvg');
+        const ccRealizedMaxEl = document.getElementById('ccRealizedMax');
+        if (ccRealizedAvgEl) {
+          ccRealizedAvgEl.textContent = Math.round(realizedAvg).toLocaleString() + ' KRW';
+          ccRealizedAvgEl.style.color = realizedAvg >= 0 ? '#0ecb81' : '#f6465d';
+        }
+        if (ccRealizedMaxEl) {
+          ccRealizedMaxEl.textContent = Math.round(realizedMax).toLocaleString() + ' KRW';
+          ccRealizedMaxEl.style.color = realizedMax >= 0 ? '#0ecb81' : '#f6465d';
+        }
+        
+        // 매수 내역 캐시 저장
+        try {
+          localStorage.setItem('buyOrdersCache', JSON.stringify(buyOrders));
+          localStorage.setItem('buyOrdersCacheTime', String(Date.now()));
+          console.log('💾 매수 카드 캐시 저장:', buyOrders.length, '개');
+        } catch (_) {}
+        
+        // 매수 내역 목록
+        const buyListEl = document.getElementById('buyOrderList');
+        if (buyOrders.length > 0) {
+          console.log('🛒 매수 목록 렌더링 시작:', buyOrders.length, '개');
+          
+          buyListEl.innerHTML = buyOrders.slice(0, 50).map((o, idx) => {
+            const price = Number(o.price || 0);
+            const size = Number(o.size || 0);
+            const time = o.time ? new Date(o.time).toLocaleString('ko-KR') : (o.ts ? new Date(o.ts).toLocaleString('ko-KR') : '-');
+            const paper = o.paper ? '[PAPER]' : '';
+            const totalKrw = (price * size).toFixed(0);
+            
+            // insight 정보
+            const ins = o.insight || {};
+            const zone = ins.zone || '-';
+            const zoneColor = zone === 'BLUE' ? '#00d1ff' : zone === 'ORANGE' ? '#ffb703' : '#888';
+            const zoneBg = zone === 'BLUE' ? 'rgba(0,209,255,0.3)' : zone === 'ORANGE' ? 'rgba(255,183,3,0.3)' : 'rgba(136,136,136,0.3)';
+            
+            const r = typeof ins.r === 'number' ? ins.r.toFixed(2) : '-';
+            const w = typeof ins.w === 'number' ? ins.w.toFixed(6) : '-';
+            const pctBlue = typeof ins.pct_blue === 'number' ? ins.pct_blue.toFixed(1) : '-';
+            const pctOrange = typeof ins.pct_orange === 'number' ? ins.pct_orange.toFixed(1) : '-';
+            const distHigh = typeof ins.dist_high === 'number' ? ins.dist_high.toFixed(2) : '-';
+            const distLow = typeof ins.dist_low === 'number' ? ins.dist_low.toFixed(2) : '-';
+            const emaDiff = typeof ins.ema_diff === 'number' ? ins.ema_diff.toFixed(0) : '-';
+            const extremeGap = typeof ins.extreme_gap === 'number' ? ins.extreme_gap.toFixed(2) : '-';
+            const zoneConf = typeof ins.zone_conf === 'number' ? ins.zone_conf.toFixed(2) : '-';
+            const zoneFlag = ins.zone_flag || 0;
+            const zoneExtremeAge = ins.zone_extreme_age || '-';
+            const zoneExtremePrice = typeof ins.zone_extreme_price === 'number' ? Math.round(ins.zone_extreme_price).toLocaleString() : '-';
+            const zoneExtremeR = typeof ins.zone_extreme_r === 'number' ? ins.zone_extreme_r.toFixed(2) : '-';
+            const zoneMaxPrice = typeof ins.zone_max_price === 'number' ? Math.round(ins.zone_max_price).toLocaleString() : '-';
+            const zoneMaxR = typeof ins.zone_max_r === 'number' ? ins.zone_max_r.toFixed(2) : '-';
+            const zoneMinPrice = typeof ins.zone_min_price === 'number' ? Math.round(ins.zone_min_price).toLocaleString() : '-';
+            const zoneMinR = typeof ins.zone_min_r === 'number' ? ins.zone_min_r.toFixed(2) : '-';
+            
+            const chartId = `buyChart_${o.ts || idx}`;
+            const tfi = (window.currentActiveTimeframe || 'minute10');
+            const tfMap = {minute1:'1m', minute3:'3m', minute5:'5m', minute10:'10m', minute15:'15m', minute30:'30m', minute60:'1h', day:'1D'};
+            const tfLabel = tfMap[tfi] || tfi;
+            return `<div id="buyCard_${o.ts || idx}" data-buy-ts="${o.ts || ''}" data-market="${o.market || 'KRW-BTC'}" data-price="${o.price || 0}" data-size="${o.size || 0}" data-nbverse-path="${o.nbverse_path || ''}" style="background: linear-gradient(135deg, rgba(30,35,41,0.95), rgba(14,20,36,0.95)); border: 1px solid ${zoneBg}; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+              <!-- 헤더 -->
+              <div style="border-bottom: 2px solid ${zoneBg}; padding-bottom: 10px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <strong style="color: #ffffff; font-size: 15px;">🛒 매수 #${idx + 1}</strong>
+                    <span style="background:#00d1ff; color:#0b1220; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${tfLabel}</span>
+                  </div>
+                  <span style="background: ${zoneColor}; color: #0b1220; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">${zone}</span>
+                </div>
+                <div style="font-size: 10px; color: #888; margin-top: 6px;">${time}</div>
+                ${paper ? '<div style="color:#ffb703; font-size:10px; margin-top:4px;">📄 PAPER MODE</div>' : ''}
+              </div>
+
+              <!-- 카드 코드 / 리그 -->
+              <div style="display:flex; justify-content:space-between; align-items:center; margin: -4px 0 10px 0;">
+                <div style="font-size:11px; color:#9aa8c2;">카드 코드</div>
+                <div id="${chartId}_ratingCode" style="font-size:14px; font-weight:700;">-</div>
+              </div>
+              <div id="${chartId}_ratingMeta" style="font-size:11px; color:#9aa8c2; margin-top:-6px; margin-bottom:10px;">-</div>
+              
+              <!-- 매수 가격 (강조) -->
+              <div style="background: rgba(14,203,129,0.1); border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(14,203,129,0.3);">
+                <div style="font-size: 10px; color: #888; margin-bottom: 4px;">매수 가격</div>
+                <div style="font-size: 20px; font-weight: 700; color: #0ecb81;">${price.toLocaleString()}</div>
+              </div>
+              
+              <!-- 수량 & 총액 -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <div style="background: rgba(14,203,129,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(14,203,129,0.3);">
+                  <div style="font-size: 9px; color: #888; margin-bottom: 4px;">매수 수량</div>
+                  <div style="font-size: 13px; font-weight: 700; color: #0ecb81;">${size.toFixed(8)}</div>
+                </div>
+                <div style="background: rgba(66,133,244,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(66,133,244,0.3);">
+                  <div style="font-size: 9px; color: #888; margin-bottom: 4px;">총 금액</div>
+                  <div style="font-size: 13px; font-weight: 700; color: #4285f4;">${Number(totalKrw).toLocaleString()}</div>
+                </div>
+              </div>
+              
+              <!-- Zone 상세 정보 -->
+              <div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">🗺️ Zone 상세</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px;">
+                    <div>
+                      <span style="color: #888;">R: </span>
+                      <span style="color: #0ecb81; font-weight: 600;">${r}</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">W: </span>
+                      <span style="color: #00d1ff; font-weight: 600;">${w}</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">Blue%: </span>
+                      <span style="color: #00d1ff; font-weight: 600;">${pctBlue}%</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">Orange%: </span>
+                      <span style="color: #ffb703; font-weight: 600;">${pctOrange}%</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">Dist High: </span>
+                      <span style="color: #f6465d; font-weight: 600;">${distHigh}</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">Dist Low: </span>
+                      <span style="color: #0ecb81; font-weight: 600;">${distLow}</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">EMA Diff: </span>
+                      <span style="color: #9c27b0; font-weight: 600;">${emaDiff}</span>
+                    </div>
+                    <div>
+                      <span style="color: #888;">Conf: </span>
+                      <span style="color: #4285f4; font-weight: 600;">${zoneConf}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Zone 극값 정보 -->
+              <div style="margin-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 Zone 극값</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="margin-bottom: 6px;">
+                    <div style="font-size: 9px; color: #888; margin-bottom: 2px;">Extreme (Age: ${zoneExtremeAge})</div>
+                    <div style="font-size: 10px;">
+                      <span style="color: #fff; font-weight: 600;">${zoneExtremePrice}</span>
+                      <span style="color: #888;"> (R: </span>
+                      <span style="color: #0ecb81; font-weight: 600;">${zoneExtremeR}</span>
+                      <span style="color: #888;">)</span>
+                    </div>
+                  </div>
+                  <div style="margin-bottom: 6px;">
+                    <div style="font-size: 9px; color: #888; margin-bottom: 2px;">MAX</div>
+                    <div style="font-size: 10px;">
+                      <span style="color: #fff; font-weight: 600;">${zoneMaxPrice}</span>
+                      <span style="color: #888;"> (R: </span>
+                      <span style="color: #0ecb81; font-weight: 600;">${zoneMaxR}</span>
+                      <span style="color: #888;">)</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 2px;">MIN</div>
+                    <div style="font-size: 10px;">
+                      <span style="color: #fff; font-weight: 600;">${zoneMinPrice}</span>
+                      <span style="color: #888;"> (R: </span>
+                      <span style="color: #f6465d; font-weight: 600;">${zoneMinR}</span>
+                      <span style="color: #888;">)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 추가 지표 -->
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px;">
+                  <div>
+                    <span style="color: #888;">Extreme Gap: </span>
+                    <span style="color: #ffb703; font-weight: 600;">${extremeGap}</span>
+                  </div>
+                  <div>
+                    <span style="color: #888;">Flag: </span>
+                    <span style="color: ${zoneFlag > 0 ? '#0ecb81' : zoneFlag < 0 ? '#f6465d' : '#888'}; font-weight: 600;">${zoneFlag}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 현재 시세 & 미실현 손익 -->
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;">
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border:1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size:10px; color:#888;">현재 시세</div>
+                  <div id="${chartId}_cpnow" style="font-size:13px; font-weight:700; color:#00d1ff;">-</div>
+                </div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border:1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size:10px; color:#888;">미실현 손익 (수수료 0.1% 포함)</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div id="${chartId}_pnl" style="font-size:13px; font-weight:700;">-</div>
+                    <div id="${chartId}_pnlRate" style="font-size:11px;">-</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 수수료 정보 -->
+              <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;">
+                <div style="font-size:10px; color:#888; margin-bottom: 4px;">💸 수수료 정보</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size:11px;">
+                  <div class="d-flex justify-content-between">
+                    <span style="color:#888;">매수 수수료:</span>
+                    <span style="color:#f6465d;" id="${chartId}_buyFee">-</span>
+                  </div>
+                  <div class="d-flex justify-content-between">
+                    <span style="color:#888;">매도 수수료:</span>
+                    <span style="color:#f6465d;" id="${chartId}_sellFee">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 액션 -->
+              <div style="display:flex; gap:8px; margin: 4px 0 12px 0;">
+                <button id="${chartId}_sellBtn" style="flex:1; background:#f6465d; color:#0b1220; border: none; border-radius: 6px; padding: 8px 10px; font-weight:700; font-size:12px; cursor:pointer;">시장가 매도</button>
+              </div>
+
+              <!-- N/B 값들 -->
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 가격 N/B</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_pmax" style="font-size:11px; font-weight:600; color:#0ecb81;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_pmin" style="font-size:11px; font-weight:600; color:#f6465d;">-</span></div>
+                </div>
+              </div>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📈 거래량 N/B</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_vmax" style="font-size:11px; font-weight:600; color:#2bdab5;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_vmin" style="font-size:11px; font-weight:600; color:#ffb703;">-</span></div>
+                </div>
+              </div>
+              <div style="margin-bottom: 4px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💵 거래대금 N/B</div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_tmax" style="font-size:11px; font-weight:600; color:#4285f4;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_tmin" style="font-size:11px; font-weight:600; color:#9c27b0;">-</span></div>
+                </div>
+              </div>
+
+              <!-- 추이 그래프 -->
+              <div style="margin-bottom: 10px; position: relative; height: 70px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 추이 그래프</div>
+                <canvas id="${chartId}" style="position: absolute; top: 20px; left: 0; width: 100%; height: 50px !important;"></canvas>
+              </div>
+            </div>`;
+          }).join('');
+
+          // 미니 차트 렌더링 (최대 10개 제한)
+          const maxCharts = 10;
+          const drawList = buyOrders.slice(0, Math.min(buyOrders.length, maxCharts));
+          const interval = window.currentActiveTimeframe || 'minute10';
+          if (!window._buyCharts) window._buyCharts = {};
+          drawList.forEach((o, idx) => {
+            const id = `buyChart_${o.ts || idx}`;
+            const el = document.getElementById(id);
+            if (!el) return;
+            const market = o.market || 'KRW-BTC';
+            const ts = o.ts || '';
+            let nbPath = o.nbverse_path || '';
+            
+            // nbverse_path 정규화 (절대 경로 → 상대 경로)
+            if (nbPath && nbPath.includes('data' + (nbPath.includes('\\') ? '\\' : '/'))) {
+              const idx = nbPath.lastIndexOf('data');
+              nbPath = nbPath.substring(idx).replace(/\\/g, '/');
+            }
+            
+            const fmt10 = (v) => (v == null ? '-' : Number(v).toFixed(10));
+            const setTxt = (sel, txt) => { const e = document.getElementById(sel); if (e) e.textContent = txt; };
+
+            const applyCpAndPnl = () => {
+              fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(interval)}&ts=${encodeURIComponent(ts)}&count=1`)
+                .then(r => r.json()).then(j => {
+                  const cp = j.current_price_now;
+                  setTxt(`${id}_cpnow`, cp != null ? Math.round(cp).toLocaleString()+' KRW' : '-');
+                  if (cp != null) {
+                    const buyPrice = Number(o.price || 0);
+                    const qty = Number(o.size || 0);
+                    const feeRate = (window.UPBIT_FEE_RATE != null) ? Number(window.UPBIT_FEE_RATE) : 0.001;
+                    const netProceedsPerUnit = (cp * (1 - feeRate));
+                    const pnl = (netProceedsPerUnit - buyPrice) * qty;
+                    const rate = buyPrice > 0 ? ((netProceedsPerUnit - buyPrice) / buyPrice) * 100 : 0;
+                    const pnlEl = document.getElementById(`${id}_pnl`);
+                    const rateEl = document.getElementById(`${id}_pnlRate`);
+                    if (pnlEl) { pnlEl.textContent = Math.round(pnl).toLocaleString()+' KRW'; pnlEl.style.color = pnl >= 0 ? '#0ecb81' : '#f6465d'; }
+                    if (rateEl) { rateEl.textContent = rate.toFixed(2)+'%'; rateEl.style.color = rate >= 0 ? '#0ecb81' : '#f6465d'; }
+                  }
+                }).catch(()=>{});
+            };
+
+            if (nbPath) {
+              // 스냅샷 사용: 차트는 스냅샷으로, 현재가는 별도 조회
+              fetch(`/api/nbverse/load?path=${encodeURIComponent(nbPath)}`)
+                .then(r => r.json())
+                .then(j => {
+                  if (!j || !j.ok) throw new Error('snapshot load failed');
+                  drawBuyMiniChart(id, j.price || [], j.volume || []);
+                  const nb = j.nb || {};
+                  setTxt(`${id}_pmax`, fmt10(nb?.price?.max));
+                  setTxt(`${id}_pmin`, fmt10(nb?.price?.min));
+                  setTxt(`${id}_vmax`, fmt10(nb?.volume?.max));
+                  setTxt(`${id}_vmin`, fmt10(nb?.volume?.min));
+                  setTxt(`${id}_tmax`, fmt10(nb?.turnover?.max));
+                  setTxt(`${id}_tmin`, fmt10(nb?.turnover?.min));
+                  try {
+                    const res = computeCardCodeFS({
+                      priceMax: nb?.price?.max, priceMin: nb?.price?.min,
+                      volumeMax: nb?.volume?.max, volumeMin: nb?.volume?.min,
+                      amountMax: nb?.turnover?.max, amountMin: nb?.turnover?.min
+                    });
+                    const codeEl = document.getElementById(`${id}_ratingCode`);
+                    const metaEl = document.getElementById(`${id}_ratingMeta`);
+                    if (codeEl) codeEl.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+                    if (metaEl) metaEl.textContent = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''}`;
+                    requestMlRating({ nb: nb, current_price: o.price, interval }, (ml) => {
+                      if (codeEl) codeEl.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span> <span style="color:#ffd700;font-size:11px;">ML ${ml.grade}+${ml.enhancement}</span>`;
+                      if (metaEl) metaEl.textContent = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''} | ML ${ml.grade} +${ml.enhancement}강`;
+                    });
+                  } catch(_) {}
+                })
+                .catch(() => {
+                  // 폴백: 기존 방식으로 로드
+                  fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(interval)}&ts=${encodeURIComponent(ts)}&count=180`)
+                    .then(r => r.json())
+                    .then(j => {
+                      if (!j || !j.ok) return;
+                      drawBuyMiniChart(id, j.price || [], j.volume || []);
+                      setTxt(`${id}_pmax`, fmt10(j.nb?.price?.max));
+                      setTxt(`${id}_pmin`, fmt10(j.nb?.price?.min));
+                      setTxt(`${id}_vmax`, fmt10(j.nb?.volume?.max));
+                      setTxt(`${id}_vmin`, fmt10(j.nb?.volume?.min));
+                      setTxt(`${id}_tmax`, fmt10(j.nb?.turnover?.max));
+                      setTxt(`${id}_tmin`, fmt10(j.nb?.turnover?.min));
+                    })
+                    .catch(()=>{});
+                })
+                .finally(() => {
+                  applyCpAndPnl();
+                });
+            } else {
+              // 기존 방식: 서버에서 캔들 + NB 통계 조회
+              fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(interval)}&ts=${encodeURIComponent(ts)}&count=180`)
+                .then(r => r.json())
+                .then(j => {
+                  if (!j || !j.ok) return;
+                  drawBuyMiniChart(id, j.price || [], j.volume || []);
+                  setTxt(`${id}_pmax`, fmt10(j.nb?.price?.max));
+                  setTxt(`${id}_pmin`, fmt10(j.nb?.price?.min));
+                  setTxt(`${id}_vmax`, fmt10(j.nb?.volume?.max));
+                  setTxt(`${id}_vmin`, fmt10(j.nb?.volume?.min));
+                  setTxt(`${id}_tmax`, fmt10(j.nb?.turnover?.max));
+                  setTxt(`${id}_tmin`, fmt10(j.nb?.turnover?.min));
+                  try {
+                    const res = computeCardCodeFS({
+                      priceMax: j.nb?.price?.max, priceMin: j.nb?.price?.min,
+                      volumeMax: j.nb?.volume?.max, volumeMin: j.nb?.volume?.min,
+                      amountMax: j.nb?.turnover?.max, amountMin: j.nb?.turnover?.min
+                    });
+                    const codeEl = document.getElementById(`${id}_ratingCode`);
+                    const metaEl = document.getElementById(`${id}_ratingMeta`);
+                    if (codeEl) codeEl.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+                    if (metaEl) metaEl.textContent = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''}`;
+                    requestMlRating({ nb: j.nb, current_price: o.price, interval }, (ml) => {
+                      if (codeEl) codeEl.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span> <span style="color:#ffd700;font-size:11px;">ML ${ml.grade}+${ml.enhancement}</span>`;
+                      if (metaEl) metaEl.textContent = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''} | ML ${ml.grade} +${ml.enhancement}강`;
+                    });
+                  } catch(_) {}
+                  const cp = j.current_price_now;
+                  setTxt(`${id}_cpnow`, cp != null ? Math.round(cp).toLocaleString()+' KRW' : '-');
+                  if (cp != null) {
+                    const buyPrice = Number(o.price || 0);
+                    const qty = Number(o.size || 0);
+                    const feeRate = (window.UPBIT_FEE_RATE != null) ? Number(window.UPBIT_FEE_RATE) : 0.001;
+                    const netProceedsPerUnit = (cp * (1 - feeRate));
+                    const pnl = (netProceedsPerUnit - buyPrice) * qty;
+                    const rate = buyPrice > 0 ? ((netProceedsPerUnit - buyPrice) / buyPrice) * 100 : 0;
+                    const pnlEl = document.getElementById(`${id}_pnl`);
+                    const rateEl = document.getElementById(`${id}_pnlRate`);
+                    if (pnlEl) { pnlEl.textContent = Math.round(pnl).toLocaleString()+' KRW'; pnlEl.style.color = pnl >= 0 ? '#0ecb81' : '#f6465d'; }
+                    if (rateEl) { rateEl.textContent = rate.toFixed(2)+'%'; rateEl.style.color = rate >= 0 ? '#0ecb81' : '#f6465d'; }
+                  }
+                })
+                .catch(()=>{});
+            }
+          });
+
+          // 매도 버튼 이벤트 바인딩 (최대 50개)
+          buyOrders.slice(0, 50).forEach((o, idx) => {
+            const id = `buyChart_${o.ts || idx}`;
+            const btn = document.getElementById(`${id}_sellBtn`);
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+              try {
+                const card = document.getElementById(`buyCard_${o.ts || idx}`);
+                const market = (card && card.getAttribute('data-market')) || o.market || 'KRW-BTC';
+                const sizeStr = (card && card.getAttribute('data-size')) || '';
+                const size = Number(sizeStr || o.size || 0);
+                
+                console.log('🔍 매도 요청 데이터:', { 
+                  market, 
+                  sizeStr, 
+                  sizeFromAttr: card ? card.getAttribute('data-size') : 'no card',
+                  sizeFromOrder: o.size,
+                  parsedSize: size 
+                });
+                
+                if (!size || size <= 0 || isNaN(size)) {
+                  const errMsg = `매도 실패: 매도 수량이 유효하지 않습니다 (size=${sizeStr})`;
+                  addTradeLog(errMsg, 'error');
+                  console.error('❌', errMsg);
+                  alert(errMsg);
+                  return;
+                }
+                
+                // 최종 확인
+                if (!confirm(`${market} ${size.toFixed(8)}개를 매도하시겠습니까?`)) {
+                  return;
+                }
+                
+                console.log('🔥 매도 시작:', { market, size: size.toFixed(8) });
+                btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = '매도 중...';
+                
+                const resp = await fetch('/api/trade/sell', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ market, size })
+                });
+                
+                console.log('📡 매도 응답 상태:', resp.status);
+                const j = await resp.json();
+                console.log('📦 매도 응답 데이터:', j);
+                
+                if (j && j.ok) {
+                  addTradeLog(`✅ 매도 완료: ${market} ${size.toFixed(8)}개`, 'success');
+                  console.log('✅ 매도 완료:', { market, size });
+                  // 목록 갱신
+                  await loadTradeStats();
+                } else {
+                  const reason = j && j.error ? j.error : '알 수 없는 오류';
+                  const msg = j && j.message ? j.message : '';
+                  addTradeLog(`❌ 매도 실패: ${reason} ${msg}`, 'error');
+                  console.error('❌ 매도 실패:', reason, msg, j);
+                  alert(`매도 실패: ${reason}\n${msg}`);
+                }
+                btn.disabled = false; btn.textContent = oldTxt;
+              } catch (err) {
+                console.error('❌ 매도 에러:', err);
+                addTradeLog(`매도 실패: ${err.message}`, 'error');
+                alert(`매도 실패: ${err.message}`);
+                try { btn.disabled = false; btn.textContent = '시장가 매도'; } catch(_) {}
+              }
+            });
+          });
+
+          // 실시간 PnL 업데이트 (15초마다 상위 10개)
+          if (window._buyPnlTimer) clearInterval(window._buyPnlTimer);
+          window._buyPnlTimer = setInterval(() => {
+            const nodes = Array.from(document.querySelectorAll('[id^="buyCard_"]')).slice(0, maxCharts);
+            nodes.forEach(node => {
+              const ts = node.getAttribute('data-buy-ts');
+              const market = node.getAttribute('data-market') || 'KRW-BTC';
+              const id = `buyChart_${ts}`;
+              fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(interval)}&ts=${encodeURIComponent(ts)}&count=1`)
+                .then(r => r.json())
+                .then(j => {
+                  const cp = j.current_price_now;
+                  const cpEl = document.getElementById(`${id}_cpnow`);
+                  if (cpEl) cpEl.textContent = cp != null ? Math.round(cp).toLocaleString()+' KRW' : '-';
+                  if (cp != null) {
+                    const card = node; // wrapper
+                    const buyPrice = Number(card.getAttribute('data-price') || 0) || 0;
+                    const qty = Number(card.getAttribute('data-size') || 0) || 0;
+                    const feeRate = (window.UPBIT_FEE_RATE != null) ? Number(window.UPBIT_FEE_RATE) : 0.001;
+                    const netProceedsPerUnit = (cp * (1 - feeRate));
+                    const pnl = (netProceedsPerUnit - buyPrice) * qty;
+                    const rate = buyPrice > 0 ? ((netProceedsPerUnit - buyPrice) / buyPrice) * 100 : 0;
+                    const pnlEl = document.getElementById(`${id}_pnl`);
+                    const rateEl = document.getElementById(`${id}_pnlRate`);
+                    if (pnlEl) { pnlEl.textContent = Math.round(pnl).toLocaleString()+' KRW'; pnlEl.style.color = pnl >= 0 ? '#0ecb81' : '#f6465d'; }
+                    if (rateEl) { rateEl.textContent = rate.toFixed(2)+'%'; rateEl.style.color = rate >= 0 ? '#0ecb81' : '#f6465d'; }
+                  }
+                })
+                .catch(() => {});
+            });
+          }, 15000);
+        } else {
+          buyListEl.innerHTML = '<div class="text-center text-muted py-2">매수 내역이 없습니다</div>';
+        }
+        
+        // 매도 통계
+        document.getElementById('sellCount').textContent = sellOrders.length;
+        document.getElementById('sellTotalAmount').textContent = Math.round(sellTotal).toLocaleString() + ' KRW';
+        document.getElementById('sellAvgPrice').textContent = Math.round(sellAvg).toLocaleString() + ' KRW';
+        
+        // 수익 계산
+        const profit = sellTotal - buyTotal;
+        const profitRate = buyTotal > 0 ? ((profit / buyTotal) * 100) : 0;
+        const profitEl = document.getElementById('totalProfit');
+        const profitRateEl = document.getElementById('profitRate');
+        
+        profitEl.textContent = Math.round(profit).toLocaleString() + ' KRW';
+        profitEl.style.color = profit >= 0 ? '#0ecb81' : '#f6465d';
+        profitRateEl.textContent = profitRate.toFixed(2) + '%';
+        profitRateEl.style.color = profit >= 0 ? '#0ecb81' : '#f6465d';
+        
+        // 매도 내역 카드 목록
+        const sellListEl = document.getElementById('sellOrderList');
+        if (sellOrders.length > 0) {
+          const tfi = (window.currentActiveTimeframe || 'minute10');
+          const tfMap = {minute1:'1m', minute3:'3m', minute5:'5m', minute10:'10m', minute15:'15m', minute30:'30m', minute60:'1h', day:'1D'};
+          const tfLabel = tfMap[tfi] || tfi;
+          sellListEl.innerHTML = sellOrders.slice(0, 20).map((o, idx) => {
+            const price = Number(o.price || 0);
+            const size = Number(o.size || 0);
+            const totalKrw = (price * size).toFixed(0);
+            const time = o.time ? new Date(o.time).toLocaleString('ko-KR') : (o.ts ? new Date(o.ts).toLocaleString('ko-KR') : '-');
+            const paper = o.paper ? '[PAPER]' : '';
+            const ins = o.insight || {};
+            const zone = ins.zone || '-';
+            const zoneColor = zone === 'BLUE' ? '#00d1ff' : zone === 'ORANGE' ? '#ffb703' : '#888';
+            const zoneBg = zone === 'BLUE' ? 'rgba(0,209,255,0.3)' : zone === 'ORANGE' ? 'rgba(255,183,3,0.3)' : 'rgba(136,136,136,0.3)';
+            const chartId = `sellChart_${o.ts || idx}`;
+            return `<div id="sellCard_${o.ts || idx}" data-sell-ts="${o.ts || ''}" data-market="${o.market || 'KRW-BTC'}" data-price="${o.price || 0}" data-size="${o.size || 0}" style="background: linear-gradient(135deg, rgba(41,30,30,0.95), rgba(36,14,14,0.95)); border: 1px solid ${zoneBg}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+              <!-- 헤더 -->
+              <div style="border-bottom: 2px solid ${zoneBg}; padding-bottom: 8px; margin-bottom: 10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <strong style="color:#ffffff; font-size:14px;">🏷️ 매도 #${idx + 1}</strong>
+                    <span style="background:#f6465d; color:#0b1220; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${tfLabel}</span>
+                  </div>
+                  <span style="background: ${zoneColor}; color: #0b1220; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;">${zone}</span>
+                </div>
+                <div style="font-size: 10px; color: #888; margin-top: 6px;">${time} ${paper}</div>
+              </div>
+
+              <!-- 카드 코드 / 리그 -->
+              <div style="display:flex; justify-content:space-between; align-items:center; margin: -4px 0 8px 0;">
+                <div style="font-size:11px; color:#9aa8c2;">카드 코드</div>
+                <div id="${chartId}_ratingCode" style="font-size:14px; font-weight:700;">-</div>
+              </div>
+              <div id="${chartId}_ratingMeta" style="font-size:11px; color:#9aa8c2; margin-top:-6px; margin-bottom:8px;">-</div>
+
+              <!-- 매도 가격/수량/총액 -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                <div style="background: rgba(246,70,93,0.08); border: 1px solid rgba(246,70,93,0.3); border-radius: 6px; padding: 8px;">
+                  <div style="font-size:10px; color:#bbb;">매도 가격</div>
+                  <div style="font-size:14px; font-weight:700; color:#f6465d;">${price.toLocaleString()}</div>
+                </div>
+                <div style="background: rgba(230,238,252,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px;">
+                  <div style="font-size:10px; color:#bbb;">매도 수량</div>
+                  <div style="font-size:13px; font-weight:700; color:#e6eefc;">${size.toFixed(8)}</div>
+                </div>
+                <div style="background: rgba(66,133,244,0.08); border: 1px solid rgba(66,133,244,0.3); border-radius: 6px; padding: 8px;">
+                  <div style="font-size:10px; color:#bbb;">총 금액</div>
+                  <div style="font-size:13px; font-weight:700; color:#4285f4;">${Number(totalKrw).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <!-- N/B 값들 -->
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 가격 N/B</div>
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_pmax" style="font-size:11px; font-weight:600; color:#0ecb81;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_pmin" style="font-size:11px; font-weight:600; color:#f6465d;">-</span></div>
+                </div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📈 거래량 N/B</div>
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_vmax" style="font-size:11px; font-weight:600; color:#2bdab5;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_vmin" style="font-size:11px; font-weight:600; color:#ffb703;">-</span></div>
+                </div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💵 거래대금 N/B</div>
+                  <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_tmax" style="font-size:11px; font-weight:600; color:#4285f4;">-</span></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_tmin" style="font-size:11px; font-weight:600; color:#9c27b0;">-</span></div>
+                </div>
+              </div>
+
+              <!-- 추이 그래프 -->
+              <div style="margin-bottom: 4px; position: relative; height: 60px;">
+                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 추이 그래프</div>
+                <canvas id="${chartId}" style="position: absolute; top: 20px; left: 0; width: 100%; height: 40px !important;"></canvas>
+              </div>
+            </div>`;
+          }).join('');
+
+          // 매도 카드 미니 차트 및 N/B 값 채우기 (상위 10개)
+          const maxSellCharts = 10;
+          sellOrders.slice(0, Math.min(sellOrders.length, maxSellCharts)).forEach((o, idx) => {
+            const id = `sellChart_${o.ts || idx}`;
+            const el = document.getElementById(id);
+            if (!el) return;
+            const market = o.market || 'KRW-BTC';
+            const ts = o.ts || '';
+            const fmt10 = (v) => (v == null ? '-' : Number(v).toFixed(10));
+            const setTxt = (sel, txt) => { const e = document.getElementById(sel); if (e) e.textContent = txt; };
+            fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(tfi)}&ts=${encodeURIComponent(ts)}&count=180`)
+              .then(r => r.json())
+              .then(j => {
+                if (!j || !j.ok) return;
+                drawBuyMiniChart(id, j.price || [], j.volume || []);
+                setTxt(`${id}_pmax`, fmt10(j.nb?.price?.max));
+                setTxt(`${id}_pmin`, fmt10(j.nb?.price?.min));
+                setTxt(`${id}_vmax`, fmt10(j.nb?.volume?.max));
+                setTxt(`${id}_vmin`, fmt10(j.nb?.volume?.min));
+                setTxt(`${id}_tmax`, fmt10(j.nb?.turnover?.max));
+                setTxt(`${id}_tmin`, fmt10(j.nb?.turnover?.min));
+                try {
+                  const res = computeCardCodeFS({
+                    priceMax: j.nb?.price?.max, priceMin: j.nb?.price?.min,
+                    volumeMax: j.nb?.volume?.max, volumeMin: j.nb?.volume?.min,
+                    amountMax: j.nb?.turnover?.max, amountMin: j.nb?.turnover?.min
+                  });
+                  const codeEl = document.getElementById(`${id}_ratingCode`);
+                  const metaEl = document.getElementById(`${id}_ratingMeta`);
+                  if (codeEl) codeEl.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+                  if (metaEl) metaEl.textContent = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''}`;
+                } catch(_) {}
+              })
+              .catch(()=>{});
+          });
+        } else {
+          sellListEl.innerHTML = '<div class="text-center text-muted py-2">매도 내역이 없습니다</div>';
+        }
+        
+        console.log('✅ Trade stats loaded:', { buyCount: buyOrders.length, sellCount: sellOrders.length });
+      } catch (err) {
+        console.error('loadTradeStats error:', err);
+      }
+    }
+    
+    // 거래 통계 새로고침 버튼 및 초기 로드
+    document.addEventListener('DOMContentLoaded', function() {
+      const refreshBtn = document.getElementById('tradeStatsRefresh');
+      if (refreshBtn) refreshBtn.addEventListener('click', loadTradeStats);
+
+      const logRefreshBtn = document.getElementById('tradeLogRefresh');
+      if (logRefreshBtn) logRefreshBtn.addEventListener('click', loadTradeStats);
+      
+      // 매수/매도 카드 JSON 내보내기
+      const exportBuyBtn = document.getElementById('exportBuyCards');
+      if (exportBuyBtn) {
+        exportBuyBtn.addEventListener('click', () => {
+          try {
+            const cached = JSON.parse(localStorage.getItem('cachedOrders') || '[]');
+            const buyOrders = cached.filter(o => o.side === 'bid' || o.side === 'BUY');
+            const filename = `buy_cards_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            const blob = new Blob([JSON.stringify(buyOrders, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            addTradeLog(`매수 카드 ${buyOrders.length}개를 ${filename}로 내보냈습니다.`, 'success');
+          } catch (err) {
+            addTradeLog(`매수 카드 내보내기 실패: ${err.message}`, 'error');
+          }
+        });
+      }
+      
+      const exportSellBtn = document.getElementById('exportSellCards');
+      if (exportSellBtn) {
+        exportSellBtn.addEventListener('click', () => {
+          try {
+            const cached = JSON.parse(localStorage.getItem('cachedOrders') || '[]');
+            const sellOrders = cached.filter(o => o.side === 'ask' || o.side === 'SELL');
+            const filename = `sell_cards_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            const blob = new Blob([JSON.stringify(sellOrders, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            addTradeLog(`매도 카드 ${sellOrders.length}개를 ${filename}로 내보냈습니다.`, 'success');
+          } catch (err) {
+            addTradeLog(`매도 카드 내보내기 실패: ${err.message}`, 'error');
+          }
+        });
+      }
+      
+      // 초기 로드
+      loadTradeStats();
+      
+      // 30초마다 자동 갱신
+      setInterval(loadTradeStats, 30000);
+    });
+    
+    // 하단 분봉 카드 기능 (자동 순회 자동 시작)
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.bottomTimeframeInitDone) {
+        console.log('ℹ️ Bottom timeframe already initialized, skipping re-init');
+        return;
+      }
+      window.bottomTimeframeInitDone = true;
+      // 자동 순회 간격(기본 30초) - 전역에서 조정 가능
+      if (!window.ROTATE_INTERVAL_MS) window.ROTATE_INTERVAL_MS = 30000;
+      const timeframeCardsBottom = document.querySelectorAll('.timeframe-card-bottom');
+      const timeframeSelect = document.getElementById('timeframe');
+      const currentTimeframeBadgeBottom = document.getElementById('currentTimeframeBottom');
+      const btnAutoRotateBottom = document.getElementById('btnAutoRotateBottom');
+      
+      let autoRotateIntervalBottom = window.autoRotateIntervalBottom || null;
+      let currentTimeframeIndexBottom = 0; // 1m부터 시작
+      
+      // 하단 분봉 카드 클릭 이벤트
+      timeframeCardsBottom.forEach((card, index) => {
+        card.addEventListener('click', function() {
+          const timeframe = this.getAttribute('data-timeframe');
+
+          // 활성 카드 변경
+          timeframeCardsBottom.forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+
+          // 상태 텍스트 업데이트
+          timeframeCardsBottom.forEach(c => {
+            c.querySelector('.timeframe-status-bottom').textContent = '대기';
+          });
+          this.querySelector('.timeframe-status-bottom').textContent = '활성';
+
+          // UI 배지 업데이트
+          if (currentTimeframeBadgeBottom) {
+            currentTimeframeBadgeBottom.textContent = this.querySelector('.timeframe-name-bottom').textContent;
+          }
+
+          // 현재 인덱스 업데이트
+          currentTimeframeIndexBottom = index;
+
+          // 분봉 전환 (가능하면 전역 함수 사용해 상단 표시까지 동기화)
+          if (typeof window.switchToTimeframe === 'function') {
+            window.switchToTimeframe(timeframe);
+          } else {
+            timeframeSelect.value = timeframe;
+            timeframeSelect.dispatchEvent(new Event('change'));
+          }
+
+          console.log(`하단 분봉 변경: ${timeframe}`);
+        
+          // 현재 활성 분봉 업데이트
+          currentActiveTimeframe = timeframe;
+          window.currentActiveTimeframe = timeframe;
+        
+          // 현재 카드 업데이트
+          loadCurrentCardDebounced();
+        });
+      });
+      
+      // 하단 자동 순회 토글
+      if (btnAutoRotateBottom) {
+        btnAutoRotateBottom.addEventListener('click', function() {
+          if (autoRotateIntervalBottom) {
+            // 자동 순회 중지
+            clearInterval(autoRotateIntervalBottom);
+            autoRotateIntervalBottom = null;
+            window.autoRotateIntervalBottom = null;
+            this.textContent = '자동 순회';
+            this.classList.remove('btn-danger');
+            this.classList.add('btn-outline-info');
+          } else {
+            // 자동 순회 시작
+            autoRotateIntervalBottom = setInterval(() => {
+              // 현재 카드 로딩 중이면 스킵
+              if (window.isLoadingCurrentCard || currentCardTimeout) return;
+              currentTimeframeIndexBottom = (currentTimeframeIndexBottom + 1) % timeframeCardsBottom.length;
+              timeframeCardsBottom[currentTimeframeIndexBottom].click();
+            }, window.ROTATE_INTERVAL_MS);
+            window.autoRotateIntervalBottom = autoRotateIntervalBottom;
+            
+            this.textContent = '순회 중지';
+            this.classList.remove('btn-outline-info');
+            this.classList.add('btn-danger');
+          }
+        });
+      }
+      
+      // 초기 설정 및 자동 순회 자동 시작
+      if (timeframeCardsBottom.length > 0) {
+        // 1m부터 시작
+        timeframeCardsBottom[0].click();
+        
+        // 2초 후 자동 순회 시작
+        setTimeout(() => {
+          if (btnAutoRotateBottom && !autoRotateIntervalBottom) {
+            autoRotateIntervalBottom = setInterval(() => {
+              // 현재 카드 로딩 중이면 스킵
+              if (window.isLoadingCurrentCard || currentCardTimeout) return;
+              currentTimeframeIndexBottom = (currentTimeframeIndexBottom + 1) % timeframeCardsBottom.length;
+              timeframeCardsBottom[currentTimeframeIndexBottom].click();
+            }, window.ROTATE_INTERVAL_MS);
+            window.autoRotateIntervalBottom = autoRotateIntervalBottom;
+            
+            if (btnAutoRotateBottom) {
+              btnAutoRotateBottom.textContent = '순회 중지';
+              btnAutoRotateBottom.classList.remove('btn-outline-info');
+              btnAutoRotateBottom.classList.add('btn-danger');
+            }
+          }
+        }, 2000);
+      }
+     });
+
+    // Win% 히스토리 로드 함수
+    function loadWinHistory() {
+      try {
+        if (!Array.isArray(window.winClientHistory)) restoreWinHistoryFromLocal();
+        const historyFile = 'data/win_history_10m.json'; // 기본값
+        fetch('/api/nbverse/zone?interval=minute10')
+          .then(r => r.json())
+          .then(j => {
+            if (!j || !j.ok) return;
+            const winList = document.getElementById('winList');
+            const winMajor = document.getElementById('winMajor');
+            const winFillBar = document.getElementById('winFillBar');
+            const winLocalCount = document.getElementById('winLocalCount');
+            const winServerCount = document.getElementById('winServerCount');
+            
+            if (!winList) return;
+            
+            const zone = j.current_zone || '-';
+            const count = j.zone_count || 0;
+            const history = j.zone_history || [];
+
+            if (winLocalCount) winLocalCount.textContent = (window.winClientHistory || []).length;
+            if (winServerCount) winServerCount.textContent = history.length;
+            
+            // 헤더 업데이트
+            if (winMajor) {
+              winMajor.textContent = zone;
+              winMajor.className = `badge zone-display-badge ${zone === 'BLUE' ? 'bg-info' : zone === 'ORANGE' ? 'bg-warning' : 'bg-secondary'}`;
+            }
+            
+            // 히스토리 항목 렌더링 (최대 25개)
+            const items = history.slice(0, 25);
+            const now = new Date();
+
+            // 세션 내 누적된 현재 카드 스냅샷을 상단에 모두 표시
+            const tfMap = {minute1:'1m', minute3:'3m', minute5:'5m', minute10:'10m', minute15:'15m', minute30:'30m', minute60:'1h', day:'1D'};
+            let clientRowsHtml = '';
+            try {
+              const list = Array.isArray(window.winClientHistory) ? window.winClientHistory : [];
+              clientRowsHtml = list.map((s, idx) => {
+                const zoneColor = s.zone === 'BLUE' ? '#00d1ff' : s.zone === 'ORANGE' ? '#ffb703' : '#888888';
+                const zoneBg = s.zone === 'BLUE' ? 'rgba(0,209,255,0.10)' : s.zone === 'ORANGE' ? 'rgba(255,183,3,0.10)' : 'rgba(255,255,255,0.04)';
+                const zoneLabel = s.zone === 'BLUE' ? '🔵 BLUE' : s.zone === 'ORANGE' ? '🟠 ORANGE' : '⚪ NONE';
+                const tfLabel = tfMap[s.tf] || s.tf || '10m';
+                const enhLabel = s.enhancement ? ` +${s.enhancement}강` : '';
+                const sparkSlice = list.slice(idx, idx + 6);
+                const step = sparkSlice.length ? 100 / sparkSlice.length : 100;
+                const stops = sparkSlice.map((x, i2) => {
+                  const start = Math.round(i2 * step);
+                  const end = Math.round((i2 + 1) * step);
+                  const c = x.zone === 'BLUE' ? '#00d1ff' : '#ffb703';
+                  return `${c} ${start}% ${end}%`;
+                }).join(', ');
+                const sparkStyle = stops ? `background:linear-gradient(90deg, ${stops}); height:14px; border-radius:6px;` : 'background:rgba(255,255,255,0.08); height:14px; border-radius:6px;';
+                return `
+                  <div class="win-chip" style="border-left:3px solid ${zoneColor}; background:${zoneBg};">
+                    <div style="display:flex; justify-content:space-between; width:100%;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-weight:700; color:${s.color || '#e6eefc'};">스냅샷 • ${s.code}</span>
+                        <span style="color:#ffd700; font-size:11px; font-weight:700;">${enhLabel}</span>
+                        <span style="background:${zoneColor}; color:#0b1220; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700;">${tfLabel}</span>
+                      </div>
+                      <div style="color:${zoneColor}; font-weight:700;">${zoneLabel}</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; width:100%; font-size:11px; color:#9aa8c2;">
+                      <span>${(new Date(s.ts)).toLocaleTimeString('ko-KR')}</span>
+                      <span>${s.league} ${s.group}${s.super ? ' • SUPER' : ''}</span>
+                    </div>
+                    <div style="margin-top:6px;">
+                      <canvas id="winSpark_${idx}" data-spark-idx="${idx}" width="120" height="36" style="width:100%; height:36px;"></canvas>
+                    </div>
+                  </div>`;
+              }).join('');
+            } catch(_) {}
+
+            const listHtml = items.map((item, idx) => {
+              const isBlue = item === 'BLUE' || item === 'B';
+              const color = isBlue ? '#00d1ff' : '#ffb703';
+              const label = isBlue ? '🔵' : '🟠';
+              const sign = isBlue ? '+' : '-';
+              
+              // 상대 시간 계산 (idx번째는 현재 시간 기준으로 idx * 10분 전)
+              const timeMs = now.getTime() - (idx * 10 * 60 * 1000);
+              const timeObj = new Date(timeMs);
+              const elapsedSec = Math.floor((now.getTime() - timeMs) / 1000);
+              
+              // 상대 시간 표시 (몇초전, 몇분전, 몇시간전)
+              let relativeTime = '';
+              if (elapsedSec < 60) {
+                relativeTime = elapsedSec + '초전';
+              } else if (elapsedSec < 3600) {
+                const minutes = Math.floor(elapsedSec / 60);
+                relativeTime = minutes + '분전';
+              } else {
+                const hours = Math.floor(elapsedSec / 3600);
+                relativeTime = hours + '시간전';
+              }
+              
+              // 히스토리(과거)는 존만 표시 (존 색으로 배경 틴트, 10m 배지 표시)
+              const bg = isBlue ? 'rgba(0,209,255,0.08)' : 'rgba(255,183,3,0.08)';
+              return `<div style="display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:6px 8px; background:${bg}; border-radius:4px; font-size:10px; border-left:3px solid ${color};">
+                <div style="display:flex; align-items:center; gap:4px; width:100%;">
+                  <span style="font-weight:700; color:${color};">${label} ${item} ${sign}</span>
+                  <span style="margin-left:auto; background:${color}; color:#0b1220; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700;">10m</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; width:100%; color:#888; font-size:9px;">
+                  <span>${relativeTime}</span>
+                  <span></span>
+                </div>
+              </div>`;
+            }).join('');
+
+            const finalHtml = (clientRowsHtml || '') + listHtml;
+            if (finalHtml) {
+              winList.innerHTML = finalHtml;
+              renderWinSnapshotSparks(window.winClientHistory || [], 'winSpark_');
+            } else {
+              winList.innerHTML = '<div style="text-align:center; color:#888; font-size:11px; padding:10px;">데이터 없음</div>';
+            }
+            
+            // 프로그레스바 업데이트
+            if (winFillBar) {
+              const fillRate = count > 0 ? Math.min(100, (count / 25) * 100) : 1;
+              winFillBar.style.width = fillRate + '%';
+            }
+
+            updateWinTrendChart(window.winClientHistory || []);
+            
+            console.log('✅ Win% 히스토리 로드:', zone, count, '개');
+          })
+          .catch(err => {
+            console.warn('⚠️ Win% 로드 실패:', err);
+            try {
+              const winList = document.getElementById('winList');
+              if (!winList) return;
+              const tfMap = {minute1:'1m', minute3:'3m', minute5:'5m', minute10:'10m', minute15:'15m', minute30:'30m', minute60:'1h', day:'1D'};
+              const list = Array.isArray(window.winClientHistory) ? window.winClientHistory : [];
+              const fallback = list.map((s, idx) => {
+                const zoneColor = s.zone === 'BLUE' ? '#00d1ff' : s.zone === 'ORANGE' ? '#ffb703' : '#888888';
+                const zoneBg = s.zone === 'BLUE' ? 'rgba(0,209,255,0.10)' : s.zone === 'ORANGE' ? 'rgba(255,183,3,0.10)' : 'rgba(255,255,255,0.04)';
+                const zoneLabel = s.zone === 'BLUE' ? '🔵 BLUE' : s.zone === 'ORANGE' ? '🟠 ORANGE' : '⚪ NONE';
+                const tfLabel = tfMap[s.tf] || s.tf || '10m';
+                const sparkSlice = list.slice(idx, idx + 6);
+                const step = sparkSlice.length ? 100 / sparkSlice.length : 100;
+                const stops = sparkSlice.map((x, i2) => {
+                  const start = Math.round(i2 * step);
+                  const end = Math.round((i2 + 1) * step);
+                  const c = x.zone === 'BLUE' ? '#00d1ff' : '#ffb703';
+                  return `${c} ${start}% ${end}%`;
+                }).join(', ');
+                const sparkStyle = stops ? `background:linear-gradient(90deg, ${stops}); height:14px; border-radius:6px;` : 'background:rgba(255,255,255,0.08); height:14px; border-radius:6px;';
+                return `
+                  <div class="win-chip" style="border-left:3px solid ${zoneColor}; background:${zoneBg};">
+                    <div style="display:flex; justify-content:space-between; width:100%;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-weight:700; color:${s.color || '#e6eefc'};">스냅샷 • ${s.code}</span>
+                        <span style="background:${zoneColor}; color:#0b1220; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700;">${tfLabel}</span>
+                      </div>
+                      <div style="color:${zoneColor}; font-weight:700;">${zoneLabel}</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; width:100%; font-size:11px; color:#9aa8c2;">
+                      <span>${(new Date(s.ts)).toLocaleTimeString('ko-KR')}</span>
+                      <span>${s.league} ${s.group}${s.super ? ' • SUPER' : ''}</span>
+                    </div>
+                    <div style="margin-top:6px;">
+                      <canvas id="winSparkFb_${idx}" data-spark-idx="${idx}" width="120" height="24" style="width:100%; height:24px;"></canvas>
+                    </div>
+                  </div>`;
+              }).join('');
+              winList.innerHTML = fallback || '<div style="text-align:center; color:#888; font-size:11px; padding:10px;">데이터 없음</div>';
+              renderWinSnapshotSparks(window.winClientHistory || [], 'winSparkFb_');
+            } catch (_) {}
+            updateWinTrendChart(window.winClientHistory || []);
+          });
+      } catch (e) {
+        console.warn('⚠️ Win% 로드 에러:', e);
+      }
+    }
+
+    function updateWinTrendChart(entries) {
+      try {
+        const list = Array.isArray(entries) ? entries.slice(0, 40) : [];
+        const ordered = list.slice().reverse(); // 오래된 → 최신
+        const labels = [];
+        const data = [];
+        let blue = 0;
+        let total = 0;
+        ordered.forEach(item => {
+          total += 1;
+          if (item.zone === 'BLUE') blue += 1;
+          const rate = total > 0 ? (blue / total) * 100 : 0;
+          const ts = item.ts ? new Date(item.ts) : new Date();
+          labels.push(ts.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+          data.push(Number(rate.toFixed(2)));
+        });
+
+        const labelEl = document.getElementById('winTrendLabel');
+        if (labelEl) {
+          labelEl.textContent = data.length ? `${data[data.length-1].toFixed(1)}%` : '-';
+        }
+
+        const ctx = document.getElementById('winTrendChart');
+        if (!ctx) return;
+        if (winTrendChart) {
+          winTrendChart.data.labels = labels;
+          winTrendChart.data.datasets[0].data = data;
+          winTrendChart.update();
+          return;
+        }
+        winTrendChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'BLUE 비율',
+              data,
+              borderColor: '#00d1ff',
+              backgroundColor: 'rgba(0,209,255,0.15)',
+              tension: 0.25,
+              fill: true,
+              pointRadius: 0,
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                min: 0,
+                max: 100,
+                ticks: { color: '#d9e2f3', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.08)' }
+              },
+              x: {
+                ticks: { color: '#9aa8c2', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+                grid: { display: false }
+              }
+            },
+            plugins: { legend: { display: false }, tooltip: { enabled: true } }
+          }
+        });
+      } catch (e) {
+        console.warn('⚠️ Win% trend chart error:', e?.message);
+      }
+    }
+
+    function renderWinSnapshotSparks(list, prefix = 'winSpark_') {
+      try {
+        const arr = Array.isArray(list) ? list : [];
+        arr.forEach((entry, idx) => {
+          const cid = `${prefix}${idx}`;
+          const cv = document.getElementById(cid);
+          if (!cv) return;
+          const slice = arr.slice(idx, idx + 6);
+          if (!slice.length) return;
+          const ctx = cv.getContext('2d');
+          const w = cv.width || 120;
+          const h = cv.height || 36;
+          ctx.clearRect(0, 0, w, h);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#00d1ff';
+          ctx.beginPath();
+          slice.forEach((s, i) => {
+            const val = s.zone === 'BLUE' ? 1 : s.zone === 'ORANGE' ? 0 : 0.5;
+            const x = (w * i) / Math.max(1, slice.length - 1);
+            const y = h - val * h;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        });
+      } catch (e) {
+        console.warn('spark render err', e?.message);
+      }
+    }
+    
+    // DOMContentLoaded에서 Win% 히스토리 초기화 및 주기적 갱신
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        restoreWinHistoryFromLocal();
+        loadWinHistory();
+        // 10초마다 Win% 히스토리 갱신
+        setInterval(loadWinHistory, 10000);
+      });
+    } else {
+      // 이미 로드된 경우 즉시 실행
+      setTimeout(() => {
+        restoreWinHistoryFromLocal();
+        loadWinHistory();
+        // 10초마다 Win% 히스토리 갱신
+        setInterval(loadWinHistory, 10000);
+      }, 100);
+    }
+
+    // Trust Level Sliders 이벤트 핸들러
+    document.addEventListener('DOMContentLoaded', function() {
+      const mlTrustSlider = document.getElementById('mlTrustSlider');
+      const nbTrustSlider = document.getElementById('nbTrustSlider');
+      const mlTrustBar = document.getElementById('mlTrustBar');
+      const nbTrustBar = document.getElementById('nbTrustBar');
+      const mlTrustValue = document.getElementById('mlTrustValue');
+      const nbTrustValue = document.getElementById('nbTrustValue');
+      const trustStatusText = document.getElementById('trustStatusText');
+      const trustBalanceText = document.getElementById('trustBalanceText');
+
+      function updateTrustDisplay() {
+        const mlVal = Number(mlTrustSlider.value) || 50;
+        const nbVal = Number(nbTrustSlider.value) || 50;
+
+        // 바 업데이트
+        mlTrustBar.style.width = mlVal + '%';
+        nbTrustBar.style.width = nbVal + '%';
+
+        // 값 표시 업데이트
+        mlTrustValue.textContent = mlVal + '%';
+        nbTrustValue.textContent = nbVal + '%';
+
+        // 상태 업데이트
+        const diff = Math.abs(mlVal - nbVal);
+        if (diff <= 10) {
+          trustStatusText.textContent = 'Balanced';
+          trustStatusText.className = 'badge bg-success';
+        } else if (mlVal > nbVal) {
+          trustStatusText.textContent = 'ML Dominant';
+          trustStatusText.className = 'badge bg-primary';
+        } else {
+          trustStatusText.textContent = 'N/B Dominant';
+          trustStatusText.className = 'badge bg-warning';
+        }
+
+        // 잔액 텍스트 업데이트
+        trustBalanceText.textContent = `ML: ${mlVal}% | N/B: ${nbVal}%`;
+
+        // 서버에 저장 (선택)
+        try {
+          fetch('/api/trust/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ml_trust: mlVal, nb_trust: nbVal })
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
+      if (mlTrustSlider) {
+        mlTrustSlider.addEventListener('input', updateTrustDisplay);
+      }
+      if (nbTrustSlider) {
+        nbTrustSlider.addEventListener('input', updateTrustDisplay);
+      }
+
+      // 초기화
+      updateTrustDisplay();
+      
+      // Win% 히스토리 초기 로드 및 주기 갱신
+      restoreWinHistoryFromLocal();
+      loadWinHistory();
+      setInterval(loadWinHistory, 5000); // 5초마다 갱신
+    });
+   </script>
+</body>
+</html>

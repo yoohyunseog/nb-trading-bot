@@ -1,0 +1,331 @@
+{
+  "history": [
+    {
+      "timestamp": "2026-01-08T10:21:32.419323",
+      "time": "2026-01-08 10:21:32",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133105000.0,
+      "price_formatted": "133,105,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T10:50:34.049922",
+      "time": "2026-01-08 10:50:34",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133430000.0,
+      "price_formatted": "133,430,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T10:59:33.316646",
+      "time": "2026-01-08 10:59:33",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133413000.0,
+      "price_formatted": "133,413,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:05:45.601334",
+      "time": "2026-01-08 11:05:45",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 133357000.0,
+      "price_formatted": "133,357,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T11:07:50.799889",
+      "time": "2026-01-08 11:07:50",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 133390000.0,
+      "price_formatted": "133,390,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T11:09:10.008372",
+      "time": "2026-01-08 11:09:10",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 133432000.0,
+      "price_formatted": "133,432,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T11:11:54.756288",
+      "time": "2026-01-08 11:11:54",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 0.0,
+      "price_formatted": "0",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T11:14:32.155037",
+      "time": "2026-01-08 11:14:32",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133364000.0,
+      "price_formatted": "133,364,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:16:31.124919",
+      "time": "2026-01-08 11:16:31",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133364000.0,
+      "price_formatted": "133,364,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:22:28.619978",
+      "time": "2026-01-08 11:22:28",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133339000.0,
+      "price_formatted": "133,339,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:28:28.983981",
+      "time": "2026-01-08 11:28:28",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133165000.0,
+      "price_formatted": "133,165,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:31:54.998969",
+      "time": "2026-01-08 11:31:54",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 133177000.0,
+      "price_formatted": "133,177,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:37:18.715068",
+      "time": "2026-01-08 11:37:18",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132860000.0,
+      "price_formatted": "132,860,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:39:20.087175",
+      "time": "2026-01-08 11:39:20",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132652000.0,
+      "price_formatted": "132,652,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:45:24.229764",
+      "time": "2026-01-08 11:45:24",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132701000.0,
+      "price_formatted": "132,701,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:51:34.615445",
+      "time": "2026-01-08 11:51:34",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132840000.0,
+      "price_formatted": "132,840,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:56:34.129747",
+      "time": "2026-01-08 11:56:34",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 132853000.0,
+      "price_formatted": "132,853,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T11:59:29.125772",
+      "time": "2026-01-08 11:59:29",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132777000.0,
+      "price_formatted": "132,777,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T11:59:51.103027",
+      "time": "2026-01-08 11:59:51",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132760000.0,
+      "price_formatted": "132,760,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:02:03.285041",
+      "time": "2026-01-08 12:02:03",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132712000.0,
+      "price_formatted": "132,712,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:07:57.628322",
+      "time": "2026-01-08 12:07:57",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132857000.0,
+      "price_formatted": "132,857,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:13:57.750687",
+      "time": "2026-01-08 12:13:57",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132937000.0,
+      "price_formatted": "132,937,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:22:40.163204",
+      "time": "2026-01-08 12:22:40",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 0.0,
+      "price_formatted": "0",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:25:03.776475",
+      "time": "2026-01-08 12:25:03",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132810000.0,
+      "price_formatted": "132,810,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:32:08.694563",
+      "time": "2026-01-08 12:32:08",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132730000.0,
+      "price_formatted": "132,730,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T12:50:05.484133",
+      "time": "2026-01-08 12:50:05",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132454000.0,
+      "price_formatted": "132,454,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T13:19:37.097768",
+      "time": "2026-01-08 13:19:37",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132461000.0,
+      "price_formatted": "132,461,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T13:52:17.699204",
+      "time": "2026-01-08 13:52:17",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 132621000.0,
+      "price_formatted": "132,621,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T14:22:56.389728",
+      "time": "2026-01-08 14:22:56",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132938000.0,
+      "price_formatted": "132,938,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T14:55:11.585981",
+      "time": "2026-01-08 14:55:11",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132499000.0,
+      "price_formatted": "132,499,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T15:27:10.065467",
+      "time": "2026-01-08 15:27:10",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 131750000.0,
+      "price_formatted": "131,750,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T16:00:45.828201",
+      "time": "2026-01-08 16:00:45",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 131303000.0,
+      "price_formatted": "131,303,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T16:31:42.704975",
+      "time": "2026-01-08 16:31:42",
+      "zone": "BLUE",
+      "timeframe": "3m",
+      "price": 131817000.0,
+      "price_formatted": "131,817,000",
+      "nb_zone_status": "BLUE"
+    },
+    {
+      "timestamp": "2026-01-08T17:04:15.732883",
+      "time": "2026-01-08 17:04:15",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132120000.0,
+      "price_formatted": "132,120,000",
+      "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-08T17:38:24.513614",
+      "time": "2026-01-08 17:38:24",
+      "zone": "ORANGE",
+      "timeframe": "3m",
+      "price": 132116000.0,
+      "price_formatted": "132,116,000",
+      "nb_zone_status": "ORANGE"
+    }
+  ],
+  "latest": {
+    "timestamp": "2026-01-08T17:38:24.513614",
+    "time": "2026-01-08 17:38:24",
+    "zone": "ORANGE",
+    "timeframe": "3m",
+    "price": 132116000.0,
+    "price_formatted": "132,116,000",
+    "nb_zone_status": "ORANGE"
+  },
+  "last_updated": "2026-01-08T17:38:24.513614",
+  "total_items": 35,
+  "timeframe": "3m"
+}

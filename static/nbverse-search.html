@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBverse Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 2em;
+        }
+
+        .search-panel {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .results-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+
+        .results-count {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .type-max {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .type-min {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .path-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .path-cell a:hover {
+            text-decoration: underline;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button:not(:disabled):hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-info {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c62828;
+        }
+
+        .number-cell {
+            text-align: right;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 NBverse Search</h1>
+
+        <div class="search-panel">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="type">
+                        <option value="">All (Max & Min)</option>
+                        <option value="max">Max</option>
+                        <option value="min">Min</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Interval</label>
+                    <select id="interval">
+                        <option value="">All</option>
+                        <option value="minute1">1분</option>
+                        <option value="minute3">3분</option>
+                        <option value="minute5">5분</option>
+                        <option value="minute10">10분</option>
+                        <option value="minute15">15분</option>
+                        <option value="minute30">30분</option>
+                        <option value="minute60">60분</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Current Price Min (원)</label>
+                    <input type="number" id="current_price_min" placeholder="예: 130000000">
+                </div>
+
+                <div class="form-group">
+                    <label>Current Price Max (원)</label>
+                    <input type="number" id="current_price_max" placeholder="예: 140000000">
+                </div>
+
+                <div class="form-group">
+                    <label>NB Price Min</label>
+                    <input type="number" id="price_min" step="0.01" placeholder="예: 0.4">
+                </div>
+
+                <div class="form-group">
+                    <label>NB Price Max</label>
+                    <input type="number" id="price_max" step="0.01" placeholder="예: 0.6">
+                </div>
+
+                <div class="form-group">
+                    <label>Limit</label>
+                    <select id="limit">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Sort By</label>
+                    <select id="sort">
+                        <option value="timestamp">Timestamp</option>
+                        <option value="price">Current Price</option>
+                        <option value="nb_price">NB Price</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Order</label>
+                    <select id="order">
+                        <option value="desc">Descending</option>
+                        <option value="asc">Ascending</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="search()">🔍 Search</button>
+                <button class="btn btn-secondary" onclick="reset()">🔄 Reset</button>
+            </div>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="results" style="display: none;">
+            <div class="results-info">
+                <div class="results-count" id="results-count"></div>
+                <div class="page-info" id="page-info"></div>
+            </div>
+
+            <div id="stats-info" style="background: #e8f4f8; padding: 15px; border-radius: 5px; margin-bottom: 15px; font-size: 13px;">
+                <strong>📊 Search Statistics:</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 8px;">
+                    <div><strong>Scanned:</strong> <span id="stat-scanned">-</span></div>
+                    <div><strong>Matched:</strong> <span id="stat-matched">-</span></div>
+                    <div><strong>Filtered:</strong> <span id="stat-filtered">-</span></div>
+                    <div><strong>Max Type:</strong> <span id="stat-max">-</span></div>
+                    <div><strong>Min Type:</strong> <span id="stat-min">-</span></div>
+                    <div id="stat-intervals" style="grid-column: 1/-1;"></div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Interval</th>
+                            <th>Timestamp</th>
+                            <th>Current Price</th>
+                            <th>Current Volume</th>
+                            <th>NB Price</th>
+                            <th>NB Price Max</th>
+                            <th>NB Price Min</th>
+                            <th>Path</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button id="btn-first" onclick="goToPage(0)">⏮ First</button>
+                <button id="btn-prev" onclick="prevPage()">◀ Prev</button>
+                <span class="page-info" id="page-number"></span>
+                <button id="btn-next" onclick="nextPage()">Next ▶</button>
+                <button id="btn-last" onclick="goToLastPage()">Last ⏭</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            Loading...
+        </div>
+
+        <div id="no-results" class="no-results" style="display: none;">
+            검색 결과가 없습니다.
+        </div>
+    </div>
+
+    <script>
+        let currentOffset = 0;
+        let currentLimit = 100;
+        let totalResults = 0;
+
+        function buildQueryString() {
+            const params = new URLSearchParams();
+            
+            const type = document.getElementById('type').value;
+            const interval = document.getElementById('interval').value;
+            const currentPriceMin = document.getElementById('current_price_min').value;
+            const currentPriceMax = document.getElementById('current_price_max').value;
+            const priceMin = document.getElementById('price_min').value;
+            const priceMax = document.getElementById('price_max').value;
+            const limit = document.getElementById('limit').value;
+            const sort = document.getElementById('sort').value;
+            const order = document.getElementById('order').value;
+
+            if (type) params.append('type', type);
+            if (interval) params.append('interval', interval);
+            if (currentPriceMin) params.append('current_price_min', currentPriceMin);
+            if (currentPriceMax) params.append('current_price_max', currentPriceMax);
+            if (priceMin) params.append('price_min', priceMin);
+            if (priceMax) params.append('price_max', priceMax);
+            params.append('limit', limit);
+            params.append('sort', sort);
+            params.append('order', order);
+            params.append('offset', currentOffset);
+
+            return params.toString();
+        }
+
+        async function search() {
+            currentOffset = 0;
+            currentLimit = parseInt(document.getElementById('limit').value);
+            await executeSearch();
+        }
+
+        async function executeSearch() {
+            const errorDiv = document.getElementById('error');
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+            const noResultsDiv = document.getElementById('no-results');
+
+            errorDiv.style.display = 'none';
+            resultsDiv.style.display = 'none';
+            noResultsDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+
+            try {
+                const queryString = buildQueryString();
+                const response = await fetch(`/api/nbverse/search?${queryString}`);
+                const data = await response.json();
+
+                loadingDiv.style.display = 'none';
+
+                if (!data.ok) {
+                    errorDiv.textContent = `Error: ${data.error}`;
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                totalResults = data.total;
+
+                if (data.results.length === 0) {
+                    noResultsDiv.style.display = 'block';
+                    return;
+                }
+
+                renderResults(data);
+                resultsDiv.style.display = 'block';
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                errorDiv.textContent = `Network Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function renderResults(data) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            data.results.forEach(item => {
+                const row = document.createElement('tr');
+                
+                const typeBadgeClass = item.type === 'max' ? 'type-max' : 'type-min';
+                
+                row.innerHTML = `
+                    <td><span class="type-badge ${typeBadgeClass}">${item.type.toUpperCase()}</span></td>
+                    <td>${item.interval || '-'}</td>
+                    <td>${formatTimestamp(item.timestamp)}</td>
+                    <td class="number-cell">${formatPrice(item.current_price)}</td>
+                    <td class="number-cell">${formatVolume(item.current_volume)}</td>
+                    <td class="number-cell">${formatDecimal(item.nb_price)}</td>
+                    <td class="number-cell">${formatDecimal(item.nb_price_max)}</td>
+                    <td class="number-cell">${formatDecimal(item.nb_price_min)}</td>
+                    <td class="path-cell" title="${item.path}">
+                        <a href="nbverse-viewer.html?path=${encodeURIComponent(item.path)}" target="_blank" style="color: #667eea; text-decoration: none;">
+                            ${item.path}
+                        </a>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+
+            // Update counts
+            document.getElementById('results-count').textContent = `Total: ${data.total} results`;
+            
+            const currentPage = Math.floor(currentOffset / currentLimit) + 1;
+            const totalPages = Math.ceil(data.total / currentLimit);
+            document.getElementById('page-info').textContent = `Showing ${data.offset + 1}-${data.offset + data.returned} of ${data.total}`;
+            document.getElementById('page-number').textContent = `Page ${currentPage} / ${totalPages}`;
+
+            // Update statistics
+            if (data.stats) {
+                document.getElementById('stat-scanned').textContent = data.stats.scanned || 0;
+                document.getElementById('stat-matched').textContent = data.stats.matched || 0;
+                document.getElementById('stat-filtered').textContent = data.stats.filtered || 0;
+                document.getElementById('stat-max').textContent = data.stats.by_type?.max || 0;
+                document.getElementById('stat-min').textContent = data.stats.by_type?.min || 0;
+                
+                // Show intervals breakdown
+                const intervalsDiv = document.getElementById('stat-intervals');
+                if (data.stats.by_interval && Object.keys(data.stats.by_interval).length > 0) {
+                    const intervalText = Object.entries(data.stats.by_interval)
+                        .map(([interval, count]) => `${interval}: ${count}`)
+                        .join(', ');
+                    intervalsDiv.innerHTML = `<strong>By Interval:</strong> ${intervalText}`;
+                } else {
+                    intervalsDiv.innerHTML = '';
+                }
+            }
+
+            // Update pagination buttons
+            document.getElementById('btn-first').disabled = currentOffset === 0;
+            document.getElementById('btn-prev').disabled = currentOffset === 0;
+            document.getElementById('btn-next').disabled = currentOffset + data.returned >= data.total;
+            document.getElementById('btn-last').disabled = currentOffset + data.returned >= data.total;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            return new Date(timestamp).toLocaleString('ko-KR');
+        }
+
+        function formatPrice(price) {
+            if (price == null) return '-';
+            return price.toLocaleString('ko-KR') + '원';
+        }
+
+        function formatVolume(volume) {
+            if (volume == null) return '-';
+            return volume.toFixed(8);
+        }
+
+        function formatDecimal(value) {
+            if (value == null) return '-';
+            return value.toFixed(6);
+        }
+
+        function nextPage() {
+            currentOffset += currentLimit;
+            executeSearch();
+        }
+
+        function prevPage() {
+            currentOffset = Math.max(0, currentOffset - currentLimit);
+            executeSearch();
+        }
+
+        function goToPage(offset) {
+            currentOffset = offset;
+            executeSearch();
+        }
+
+        function goToLastPage() {
+            const totalPages = Math.ceil(totalResults / currentLimit);
+            currentOffset = (totalPages - 1) * currentLimit;
+            executeSearch();
+        }
+
+        function reset() {
+            document.getElementById('type').value = '';
+            document.getElementById('interval').value = '';
+            document.getElementById('current_price_min').value = '';
+            document.getElementById('current_price_max').value = '';
+            document.getElementById('price_min').value = '';
+            document.getElementById('price_max').value = '';
+            document.getElementById('limit').value = '100';
+            document.getElementById('sort').value = 'timestamp';
+            document.getElementById('order').value = 'desc';
+
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('no-results').style.display = 'none';
+        }
+
+        // Auto-search on Enter key
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                search();
+            }
+        });
+    </script>
+</body>
+</html>

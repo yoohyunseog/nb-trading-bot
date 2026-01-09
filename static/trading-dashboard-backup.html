@@ -1,0 +1,597 @@
+<!-- Trading Dashboard Content -->
+  <style>
+    html, body{ overflow-anchor: none; }
+    body{background:#0b1220;color:#ffffff;font-family:-apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif;font-size:14px}
+    .card{background:#1e2329;border:1px solid rgba(255,255,255,0.08)}
+    #tvChart{width:100%;height:82vh;min-height:460px}
+    .kv{display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px dashed rgba(255,255,255,0.08)}
+    .buy{color:#0ecb81}.sell{color:#f6465d}
+    @media (max-width: 991px){ #tvChart{height:70vh} }
+    .toolbar .form-control,.toolbar .form-select{color:#ffffff;background:#2b3139;border:1px solid rgba(255,255,255,0.2)}
+    .toolbar .btn{color:#ffffff}
+    .form-check-label{color:#e0e7ff}
+    .kv span:first-child{color:#ffffff}
+    .kv span:last-child{color:#ffffff;font-weight:700}
+    .badge{color:#ffffff}
+    .text-muted{color:#ffffff !important}
+    /* Assets UI */
+    .asset-stat{background:#0e1424;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px}
+    .asset-stat .label{color:#ffffff;font-size:12px}
+    .asset-stat .value{color:#ffffff;font-size:20px;font-weight:700}
+    .asset-bars{display:flex;flex-direction:column;gap:8px}
+    .asset-bar .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    .asset-bar .label{color:#ffffff;font-weight:600}
+    .asset-bar .muted{color:#ffffff;font-size:12px;margin-left:8px}
+    .asset-bar .meter{height:10px;border-radius:6px;background:#10182a;overflow:hidden;border:1px solid rgba(255,255,255,0.08)}
+    .asset-bar .fill{height:100%;background:linear-gradient(90deg,#0ecb81,#2bdab5)}
+    .asset-bar.krw .fill{background:linear-gradient(90deg,#4285f4,#72a6ff)}
+    .chip{display:inline-block;padding:3px 8px;margin:2px;border-radius:999px;background:#2b3139;border:1px solid rgba(255,255,255,0.12);font-size:12px;color:#ffffff}
+    /* Win list */
+    #winList{display:flex;flex-direction:column;gap:6px;overflow-y:auto;overflow-x:hidden}
+    #winList{scrollbar-width:none;-ms-overflow-style:none}
+    #winList::-webkit-scrollbar{width:0;height:0}
+    /* Win card scroll hide scrollbar */
+    #winCard{scrollbar-width:none;-ms-overflow-style:none}
+    #winCard::-webkit-scrollbar{width:0;height:0}
+    .win-chip{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;color:#ffffff;background:#1b2437;transition:transform .2s ease, box-shadow .2s ease;min-height:32px}
+    .win-chip.positive{background:linear-gradient(90deg,rgba(14,203,129,0.35),rgba(14,203,129,0.10));}
+    .win-chip.negative{background:linear-gradient(90deg,rgba(246,70,93,0.35),rgba(246,70,93,0.10));}
+    .win-chip:hover{transform:translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.35)}
+    .win-chip .meta{font-size:11px;color:#d9e2f3;line-height:1.3;text-align:left}
+    .win-chip .val{font-weight:700;white-space:normal;word-break:break-word;flex:1}
+    /* Zone badge on win buttons */
+    .zone-badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:11px;font-weight:700;color:#0b1220}
+    .zone-blue{background:#00d1ff;color:#0b1220}
+    .zone-orange{background:#ffb703;color:#0b1220}
+    
+    /* Zone display improvements */
+    .zone-display-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .zone-display-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    
+    .zone-display-label {
+      font-size: 10px;
+      color: #888888;
+      font-weight: 500;
+    }
+    
+    .zone-display-badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    
+    .zone-divider {
+      width: 1px;
+      height: 20px;
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .zone-stats {
+      font-size: 11px;
+      color: #ffffff;
+      font-weight: 500;
+    }
+    /* Win card zone theming */
+    .win-card-blue{background:linear-gradient(180deg,rgba(0,209,255,0.12),rgba(0,209,255,0.04)) !important}
+    .win-card-orange{background:linear-gradient(180deg,rgba(255,183,3,0.12),rgba(255,183,3,0.04)) !important}
+    /* PnL slider glow */
+    @keyframes glowGreen { 0%{ box-shadow:0 0 0 rgba(14,203,129,0);} 50%{ box-shadow:0 0 12px rgba(14,203,129,0.8);} 100%{ box-shadow:0 0 0 rgba(14,203,129,0);} }
+    @keyframes glowRed { 0%{ box-shadow:0 0 0 rgba(246,70,93,0);} 50%{ box-shadow:0 0 12px rgba(246,70,93,0.8);} 100%{ box-shadow:0 0 0 rgba(246,70,93,0);} }
+    .glow-green{ animation: glowGreen .9s ease; }
+    .glow-red{ animation: glowRed .9s ease; }
+    #pnlLeftLabel,#pnlRightLabel{ color:#ffffff }
+    /* Masonry cards animation */
+    .nb-coin-item{ transition: transform .3s ease, width .3s ease, height .3s ease, opacity .3s ease; will-change: transform; }
+    /* Speech bubble */
+    .nb-bubble{ position:relative; background:#1b2437; border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:8px 10px; color:#ffffff; font-size:12px }
+    .nb-bubble:after{ content:""; position:absolute; bottom:-6px; left:18px; border-width:6px 6px 0 6px; border-style:solid; border-color:rgba(255,255,255,0.15) transparent transparent transparent }
+    .nb-bubble:before{ content:""; position:absolute; bottom:-5px; left:19px; border-width:5px 5px 0 5px; border-style:solid; border-color:#1b2437 transparent transparent transparent }
+    
+    /* Auto Trading Status Styles */
+    .auto-trading-status {
+      background: #0e1424;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .auto-trading-status h4 {
+      color: #ffffff;
+      font-size: 14px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    
+    .member-auto-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+    }
+    
+    .member-auto-status:last-child {
+      border-bottom: none;
+    }
+    
+    .member-auto-status span {
+      color: #ffffff;
+    }
+    
+    .member-auto-status span:first-child {
+      font-weight: 600;
+      flex: 1;
+    }
+    
+    .member-auto-status span:nth-child(2) {
+      margin: 0 12px;
+      font-size: 11px;
+    }
+    
+    .member-auto-status span:last-child {
+      font-size: 11px;
+      color: #d9e2f3;
+    }
+  </style>
+</head>
+<body class="text-white">
+  <div class="container-xxl py-3">
+    <!-- Trading Dashboard Content -->
+    <div class="row">
+        <div class="col-12">
+            <!-- 헤더 섹션 -->
+            <div class="card mb-4 fade-in-up">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <h4 class="mb-0">
+                            <i class="fas fa-chart-line text-primary me-2"></i>
+                            Trading Dashboard
+                        </h4>
+                        <span class="badge bg-success">Live</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary-modern btn-modern btn-sm" onclick="refreshChart()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                        <button class="btn btn-warning-modern btn-modern btn-sm" onclick="toggleAutoTrade()">
+                            <i class="fas fa-robot me-1"></i>Auto Trade
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Real-time trading dashboard with advanced charting and AI-powered signals
+                    </p>
+                </div>
+            </div>
+
+            <!-- 차트 섹션 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card slide-in-right">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chart-area text-primary me-2"></i>
+                                    KRW-BTC Chart
+                                </h5>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm" id="timeframeSelect" style="width: auto;">
+                                        <option value="1m">1m</option>
+                                        <option value="5m">5m</option>
+                                        <option value="15m">15m</option>
+                                        <option value="30m">30m</option>
+                                        <option value="1h">1h</option>
+                                        <option value="4h">4h</option>
+                                        <option value="1d">1d</option>
+                                    </select>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="toggleFullscreen()">
+                                        <i class="fas fa-expand"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div id="tvChart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 거래 정보 섹션 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card h-100 slide-in-right">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-wallet text-primary me-2"></i>
+                                Assets
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="asset-stats">
+                                <div class="asset-stat">
+                                    <div class="asset-label">KRW Balance</div>
+                                    <div class="asset-value" id="balanceKrw">1,000,000</div>
+                                </div>
+                                <div class="asset-stat">
+                                    <div class="asset-label">BTC Balance</div>
+                                    <div class="asset-value" id="balanceBtc">0.00000000</div>
+                                </div>
+                                <div class="asset-stat">
+                                    <div class="asset-label">Avg Price</div>
+                                    <div class="asset-value" id="avgPrice">-</div>
+                                </div>
+                                <div class="asset-stat">
+                                    <div class="asset-label">Position</div>
+                                    <div class="asset-value" id="positionSide">FLAT</div>
+                                </div>
+                                <div class="asset-stat">
+                                    <div class="asset-label">Unrealized PnL</div>
+                                    <div class="asset-value" id="unrealizedPnl">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 slide-in-right">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-history text-primary me-2"></i>
+                                Order History
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="orderHistory" class="order-history">
+                                <div class="text-muted text-center">
+                                    <i class="fas fa-clock me-1"></i>
+                                    No orders yet
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 거래 제어 섹션 -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card fade-in-up">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-tools text-primary me-2"></i>
+                                Trading Controls
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="trading-control">
+                                        <label class="form-label">Buy Amount (KRW)</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="buyAmount" value="100000" min="1000" step="1000">
+                                            <button class="btn btn-success-modern btn-modern" id="btnBuy">
+                                                <i class="fas fa-arrow-up me-1"></i>BUY
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="trading-control">
+                                        <label class="form-label">Sell Amount (KRW)</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="sellAmount" value="100000" min="1000" step="1000">
+                                            <button class="btn btn-danger-modern btn-modern" id="btnSell">
+                                                <i class="fas fa-arrow-down me-1"></i>SELL
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="trading-control">
+                                        <label class="form-label">Actions</label>
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-warning-modern btn-modern" id="btnClose">
+                                                <i class="fas fa-times me-1"></i>Close Position
+                                            </button>
+                                            <button class="btn btn-info-modern btn-modern" onclick="resetTrading()">
+                                                <i class="fas fa-redo me-1"></i>Reset
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* Trading Dashboard 특별 스타일 */
+    .chart-container {
+        width: 100%;
+        height: 70vh;
+        min-height: 460px;
+        background: var(--dark-bg);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    #tvChart {
+        width: 100%;
+        height: 100%;
+    }
+
+    .asset-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .asset-stat {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 8px;
+        transition: var(--transition);
+    }
+
+    .asset-stat:hover {
+        background: rgba(255,255,255,0.08);
+        transform: translateX(4px);
+    }
+
+    .asset-label {
+        color: var(--text-secondary);
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .asset-value {
+        color: var(--text-primary);
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .order-history {
+        max-height: 200px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .order-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.03);
+        border-radius: 6px;
+        font-size: 13px;
+    }
+
+    .order-side-buy {
+        color: var(--success-color);
+    }
+
+    .order-side-sell {
+        color: var(--danger-color);
+    }
+
+    .trading-control {
+        margin-bottom: 16px;
+    }
+
+    .trading-control .form-label {
+        color: var(--text-secondary);
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+
+    .trading-control .form-control {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 8px;
+    }
+
+    .trading-control .form-control:focus {
+        background: var(--card-bg);
+        border-color: var(--primary-color);
+        color: var(--text-primary);
+        box-shadow: 0 0 0 0.2rem rgba(0, 209, 255, 0.25);
+    }
+
+    .trading-control .form-select {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 8px;
+    }
+
+    .trading-control .form-select:focus {
+        background: var(--card-bg);
+        border-color: var(--primary-color);
+        color: var(--text-primary);
+        box-shadow: 0 0 0 0.2rem rgba(0, 209, 255, 0.25);
+    }
+
+    .btn-danger-modern {
+        background: linear-gradient(135deg, var(--danger-color), #e03131);
+        color: white;
+    }
+
+    .btn-info-modern {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        color: white;
+    }
+
+    /* 애니메이션 */
+    .fade-in-up {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    .slide-in-right {
+        animation: slideInRight 0.5s ease-out;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    /* 반응형 */
+    @media (max-width: 768px) {
+        .chart-container {
+            height: 50vh;
+        }
+        
+        .trading-control {
+            margin-bottom: 20px;
+        }
+        
+        .card-header .d-flex {
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
+    }
+
+    /* 스크롤바 스타일링 */
+    .order-history::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .order-history::-webkit-scrollbar-track {
+        background: var(--dark-bg);
+        border-radius: 3px;
+    }
+
+    .order-history::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 3px;
+    }
+
+    .order-history::-webkit-scrollbar-thumb:hover {
+        background: var(--primary-color);
+    }
+    </style>
+
+    <script>
+    // Trading Dashboard JavaScript
+    function refreshChart() {
+        if (typeof window.refreshNbZoneStrip === 'function') {
+            window.refreshNbZoneStrip();
+        }
+        
+        // 사운드 재생
+        if (typeof window.playNotificationSound === 'function') {
+            window.playNotificationSound();
+        }
+        
+        console.log('🔄 Chart refreshed');
+    }
+
+    function toggleAutoTrade() {
+        // Auto trade 토글 로직
+        const button = document.querySelector('[onclick="toggleAutoTrade()"]');
+        const icon = button.querySelector('i');
+        
+        if (icon.classList.contains('fa-robot')) {
+            icon.className = 'fas fa-stop me-1';
+            button.classList.remove('btn-warning-modern');
+            button.classList.add('btn-danger-modern');
+            console.log('🟢 Auto trade enabled');
+        } else {
+            icon.className = 'fas fa-robot me-1';
+            button.classList.remove('btn-danger-modern');
+            button.classList.add('btn-warning-modern');
+            console.log('🔴 Auto trade disabled');
+        }
+        
+        // 사운드 재생
+        if (typeof window.playNotificationSound === 'function') {
+            window.playNotificationSound();
+        }
+    }
+
+    function toggleFullscreen() {
+        const chartContainer = document.getElementById('tvChart');
+        
+        if (!document.fullscreenElement) {
+            chartContainer.requestFullscreen().catch(err => {
+                console.log('Fullscreen failed:', err);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+        
+        // 사운드 재생
+        if (typeof window.playNotificationSound === 'function') {
+            window.playNotificationSound();
+        }
+    }
+
+    function resetTrading() {
+        if (confirm('Are you sure you want to reset all trading data?')) {
+            // Reset logic here
+            console.log('🔄 Trading data reset');
+            
+            // 사운드 재생
+            if (typeof window.playSuccessSound === 'function') {
+                window.playSuccessSound();
+            }
+        }
+    }
+
+    // 페이지 로드 시 초기화
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('📊 Trading Dashboard loaded');
+        
+        // 차트 초기화
+        if (typeof window.refreshNbZoneStrip === 'function') {
+            setTimeout(() => {
+                window.refreshNbZoneStrip();
+            }, 1000);
+        }
+    });
+    </script>
+</div>
+
+

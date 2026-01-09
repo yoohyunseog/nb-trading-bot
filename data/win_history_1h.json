@@ -1,0 +1,18 @@
+{
+  "latest": {
+    "timestamp": "2026-01-08T18:03:30.933580",
+    "time": "2026-01-08 18:03:30",
+    "zone": "ORANGE",
+    "nb_zone": "ORANGE",
+    "ml_zone": "ORANGE",
+    "nb_trust": 82.0,
+    "ml_trust": 47.0,
+    "decision_reason": "consensus",
+    "timeframe": "1h",
+    "price": 131796000.0,
+    "price_formatted": "131,796,000",
+    "win_history_count": 25
+  },
+  "last_updated": "2026-01-08T18:03:30.933580",
+  "timeframe": "1h"
+}

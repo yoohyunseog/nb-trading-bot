@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>8BIT Balance Test</title>
+  <style>
+    body{font-family:-apple-system, Segoe UI, Roboto, 'Noto Sans KR', Arial, sans-serif; background:#0b1220; color:#e6eefc; margin:0; padding:24px}
+    .card{background:#1e2329; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:18px; max-width:860px; margin:0 auto}
+    h2{margin:0 0 12px 0}
+    label{display:block; margin:8px 0 4px; color:#c2d1ea}
+    input[type=text]{width:100%; max-width:420px; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:#2b3139; color:#ffffff}
+    .row{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0}
+    button{background:#2d7ef7; border:none; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer}
+    button.secondary{background:#445269}
+    button.warn{background:#f6465d}
+    pre{background:#0f172a; color:#e6eefc; padding:12px; border-radius:8px; overflow:auto; max-height:50vh}
+    .hint{color:#9fb3d9; font-size:13px}
+  </style>
+  <script>
+    async function postJson(url, body){
+      const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+      const txt = await r.text();
+      try{ return JSON.parse(txt); }catch(_){ return { ok:false, error:'non_json', body: txt.slice(0,200) }; }
+    }
+    async function getJson(url){
+      const r = await fetch(url);
+      const txt = await r.text();
+      try{ return JSON.parse(txt); }catch(_){ return { ok:false, error:'non_json', body: txt.slice(0,200) }; }
+    }
+    function base(){ return document.getElementById('base').value.replace(/\/$/,''); }
+    function out(v){ document.getElementById('out').textContent = (typeof v==='string')? v : JSON.stringify(v, null, 2); }
+    async function setPaper(flag){ out('Loading...'); out(await postJson(base() + '/api/bot/config', { paper: !!flag })); }
+    async function fetchStatus(){ out('Loading...'); out(await getJson(base() + '/api/bot/status')); }
+    async function fetchBalance(){ out('Loading...'); out(await getJson(base() + '/api/balance')); }
+    async function setKeys(){
+      const ak = document.getElementById('ak').value.trim();
+      const sk = document.getElementById('sk').value.trim();
+      const oak = document.getElementById('oak').value.trim();
+      const osk = document.getElementById('osk').value.trim();
+      const body = {};
+      if (ak && sk){ body.access_key = ak; body.secret_key = sk; }
+      if (oak && osk){ body.open_api_access_key = oak; body.open_api_secret_key = osk; }
+      if (!Object.keys(body).length){ out('입력된 키가 없습니다.'); return; }
+      out('Loading...'); out(await postJson(base() + '/api/bot/config', body));
+      // autosave on apply if enabled
+      try{
+        const autoSave = document.getElementById('autoSaveKeys').checked;
+        if (autoSave){
+          localStorage.setItem('eightbit_keys', JSON.stringify({ ak, sk, oak, osk }));
+        }
+      }catch(_){ }
+    }
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const saved = localStorage.getItem('eightbit_base');
+      if (saved){ document.getElementById('base').value = saved; }
+      document.getElementById('base').addEventListener('change', (e)=>{ localStorage.setItem('eightbit_base', e.target.value); });
+      // load keys + toggles
+      try{
+        const t1 = localStorage.getItem('eightbit_keys_auto_save');
+        const t2 = localStorage.getItem('eightbit_keys_auto_apply');
+        if (t1!==null) document.getElementById('autoSaveKeys').checked = (t1==='true');
+        if (t2!==null) document.getElementById('autoApplyKeys').checked = (t2==='true');
+      }catch(_){ }
+      try{
+        const ks = JSON.parse(localStorage.getItem('eightbit_keys')||'{}');
+        if (ks.ak) document.getElementById('ak').value = ks.ak;
+        if (ks.sk) document.getElementById('sk').value = ks.sk;
+        if (ks.oak) document.getElementById('oak').value = ks.oak;
+        if (ks.osk) document.getElementById('osk').value = ks.osk;
+        // auto-apply on load if enabled
+        if (document.getElementById('autoApplyKeys').checked && (ks.ak||ks.oak)){
+          setKeys();
+        }
+      }catch(_){ }
+      // auto save on input changes when enabled
+      const sync = ()=>{
+        try{
+          if (!document.getElementById('autoSaveKeys').checked) return;
+          const ak = document.getElementById('ak').value.trim();
+          const sk = document.getElementById('sk').value.trim();
+          const oak = document.getElementById('oak').value.trim();
+          const osk = document.getElementById('osk').value.trim();
+          localStorage.setItem('eightbit_keys', JSON.stringify({ ak, sk, oak, osk }));
+        }catch(_){ }
+      };
+      ['ak','sk','oak','osk'].forEach(id=>{ const el = document.getElementById(id); if (el) el.addEventListener('input', sync); });
+      // persist toggle states
+      const s1 = document.getElementById('autoSaveKeys'); if (s1) s1.addEventListener('change', (e)=>{ try{ localStorage.setItem('eightbit_keys_auto_save', String(!!e.target.checked)); }catch(_){ } });
+      const s2 = document.getElementById('autoApplyKeys'); if (s2) s2.addEventListener('change', (e)=>{ try{ localStorage.setItem('eightbit_keys_auto_apply', String(!!e.target.checked)); }catch(_){ } });
+    });
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h2>8BIT Balance Test</h2>
+    <div class="hint">Run the Flask UI server first: from bot folder execute: python .\server.py</div>
+
+    <label for="base">API Base URL</label>
+    <input id="base" type="text" value="http://127.0.0.1:5057" />
+
+    <div class="row">
+      <button onclick="setPaper(false)">Paper = false</button>
+      <button class="secondary" onclick="setPaper(true)">Paper = true</button>
+      <button onclick="fetchStatus()">Status</button>
+      <button onclick="fetchBalance()">Load Balance</button>
+    </div>
+
+    <label>Standard API Keys (pyupbit)</label>
+    <input id="ak" type="text" placeholder="UPBIT_ACCESS_KEY" />
+    <input id="sk" type="text" placeholder="UPBIT_SECRET_KEY" />
+    <div style="height:6px"></div>
+    <label>OPEN API Keys (JWT direct)</label>
+    <input id="oak" type="text" placeholder="UPBIT_OPEN_API_ACCESS_KEY" />
+    <input id="osk" type="text" placeholder="UPBIT_OPEN_API_SECRET_KEY" />
+    <div class="row">
+      <button onclick="setKeys()">Apply Keys (server now)</button>
+      <label style="display:flex;align-items:center;gap:6px"><input id="autoSaveKeys" type="checkbox" checked> Auto Save</label>
+      <label style="display:flex;align-items:center;gap:6px"><input id="autoApplyKeys" type="checkbox"> Auto Apply (on load)</label>
+    </div>
+
+    <pre id="out">Results will appear here.</pre>
+
+    <div class="hint">Note: If you see missing_keys, check your .env path/keys and restart the server.</div>
+  </div>
+</body>
+</html>
+
+

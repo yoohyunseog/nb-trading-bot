@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "intervals": [
+    "minute120"
+  ],
+  "cooldown_sec": 0,
+  "min_conf_pct": 80.0,
+  "krw": null,
+  "pnl_ratio": null
+}

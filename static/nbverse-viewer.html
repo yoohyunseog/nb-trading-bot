@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBverse Card Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn-back {
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-back:hover {
+            background: #5a6268;
+        }
+
+        .path-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 13px;
+            word-break: break-all;
+            color: #555;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .meta-item {
+            background: #e8f4f8;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .meta-label {
+            font-size: 11px;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .meta-value {
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .json-container {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        pre {
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .json-key {
+            color: #9cdcfe;
+        }
+
+        .json-string {
+            color: #ce9178;
+        }
+
+        .json-number {
+            color: #b5cea8;
+        }
+
+        .json-boolean {
+            color: #569cd6;
+        }
+
+        .json-null {
+            color: #569cd6;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #c62828;
+            margin-bottom: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: #f8f9fa;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab:hover:not(.active) {
+            background: #e0e0e0;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .chart-preview {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .chart-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 NBverse Card Viewer</h1>
+            <a href="javascript:window.close()" class="btn-back">✕ Close</a>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="loading" class="loading">Loading...</div>
+
+        <div id="content" style="display: none;">
+            <div class="path-info">
+                <strong>Path:</strong> <span id="card-path"></span>
+            </div>
+
+            <div class="metadata" id="metadata"></div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('json')">📋 JSON</button>
+                <button class="tab" onclick="switchTab('chart')">📊 Chart Data</button>
+                <button class="tab" onclick="switchTab('nb')">🔢 NB Values</button>
+            </div>
+
+            <div id="tab-json" class="tab-content active">
+                <div class="json-container">
+                    <pre id="json-content"></pre>
+                </div>
+            </div>
+
+            <div id="tab-chart" class="tab-content">
+                <div class="chart-preview">
+                    <div class="chart-info">
+                        <span><strong>Chart Data Length:</strong> <span id="chart-length">-</span></span>
+                        <span><strong>Price Range:</strong> <span id="price-range">-</span></span>
+                    </div>
+                    <div class="json-container">
+                        <pre id="chart-content"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-nb" class="tab-content">
+                <div class="chart-preview">
+                    <div class="json-container">
+                        <pre id="nb-content"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        async function loadCard() {
+            const params = new URLSearchParams(window.location.search);
+            const path = params.get('path');
+
+            if (!path) {
+                showError('No path parameter provided');
+                return;
+            }
+
+            document.getElementById('card-path').textContent = path;
+
+            try {
+                const response = await fetch(`/api/nbverse/file?path=${encodeURIComponent(path)}`);
+                const result = await response.json();
+
+                if (!result.ok) {
+                    showError(result.error || 'Failed to load card');
+                    return;
+                }
+
+                currentData = result.data;
+                displayCard(result.data);
+            } catch (error) {
+                showError(`Network Error: ${error.message}`);
+            }
+        }
+
+        function displayCard(data) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+
+            // Display metadata
+            const metadata = document.getElementById('metadata');
+            metadata.innerHTML = `
+                <div class="meta-item">
+                    <div class="meta-label">Interval</div>
+                    <div class="meta-value">${data.interval || '-'}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Timestamp</div>
+                    <div class="meta-value">${formatTimestamp(data.timestamp)}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Current Price</div>
+                    <div class="meta-value">${formatPrice(data.current_price)}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Current Volume</div>
+                    <div class="meta-value">${formatVolume(data.current_volume)}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">NB Price Max</div>
+                    <div class="meta-value">${formatDecimal(data.nb?.price?.max)}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">NB Price Min</div>
+                    <div class="meta-value">${formatDecimal(data.nb?.price?.min)}</div>
+                </div>
+            `;
+
+            // Display full JSON
+            document.getElementById('json-content').innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+
+            // Display chart data
+            if (data.chart && data.chart.length > 0) {
+                const prices = data.chart.map(c => c.close || c.c || c.price).filter(p => p != null);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                
+                document.getElementById('chart-length').textContent = data.chart.length;
+                document.getElementById('price-range').textContent = 
+                    `${formatPrice(minPrice)} ~ ${formatPrice(maxPrice)}`;
+                document.getElementById('chart-content').innerHTML = 
+                    syntaxHighlight(JSON.stringify(data.chart, null, 2));
+            } else {
+                document.getElementById('chart-length').textContent = '0';
+                document.getElementById('price-range').textContent = '-';
+                document.getElementById('chart-content').textContent = 'No chart data';
+            }
+
+            // Display NB values
+            if (data.nb) {
+                document.getElementById('nb-content').innerHTML = 
+                    syntaxHighlight(JSON.stringify(data.nb, null, 2));
+            } else {
+                document.getElementById('nb-content').textContent = 'No NB data';
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            return new Date(timestamp).toLocaleString('ko-KR');
+        }
+
+        function formatPrice(price) {
+            if (price == null) return '-';
+            return price.toLocaleString('ko-KR') + '원';
+        }
+
+        function formatVolume(volume) {
+            if (volume == null) return '-';
+            return volume.toFixed(8);
+        }
+
+        function formatDecimal(value) {
+            if (value == null) return '-';
+            return value.toFixed(6);
+        }
+
+        // Load card on page load
+        loadCard();
+    </script>
+</body>
+</html>

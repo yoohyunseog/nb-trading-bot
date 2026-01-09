@@ -1,0 +1,113 @@
+<div class="row">
+    <div class="col-12">
+        <div class="card border-secondary rounded-3 p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-white mb-0">🃏 Guild Members Card System</h4>
+                <div>
+                    <button class="btn btn-primary btn-sm me-2" onclick="toggleNBGuild()">🏛️ N/B 길드</button>
+                    <button class="btn btn-warning btn-sm me-2" onclick="toggleBitcoin()">₿ 비트코인</button>
+                    <button class="btn btn-success btn-sm" onclick="toggleMovingVillage()">🚶 이동하는 마을</button>
+                </div>
+            </div>
+            <p class="text-muted mb-4">AI 길드원들의 카드 기반 자동 거래 시스템 - N/B 길드 엔진</p>
+            
+            <!-- N/B Zone Status 섹션 (상단) -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card border-secondary rounded-3 p-2 mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted" style="font-size:12px">N/B Zone Status</span>
+                                <span id="nbZoneTimeframe" class="badge bg-info" style="font-size:10px">5m</span>
+                            </div>
+                            <span id="nbZoneNow" class="badge bg-secondary">ORANGE</span>
+                        </div>
+                        <div id="nbZoneStrip" style="height:12px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; display:flex; align-items:center; padding:2px">
+                            <div class="text-muted" style="font-size:11px; padding-left:6px">Loading…</div>
+                        </div>
+                        <div class="text-white" style="font-size:11px; margin-top:4px">Visible chart zones (left=older → right=newer)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 게임 캔버스 -->
+            <div class="text-center mb-3">
+                <canvas id="gameCanvas" width="1200" height="800" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: linear-gradient(135deg, #0b1220 0%, #1e2329 100%); max-width: 100%; width: 100%; height: auto;"></canvas>
+            </div>
+            
+            <!-- 게임 정보 -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="text-white">🏛️ N/B 길드 시스템</h6>
+                            <div id="gameStatus" class="small text-muted">
+                                <div>길드장: <span id="mayorStatus" class="text-warning">활성</span></div>
+                                <div>Scout: <span id="resident1Status" class="text-info">대기</span></div>
+                                <div>Analyst: <span id="resident2Status" class="text-info">대기</span></div>
+                                <div>Guardian: <span id="resident3Status" class="text-info">대기</span></div>
+                                <div>Elder: <span id="resident4Status" class="text-info">대기</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="text-white">📊 길드 통계</h6>
+                            <div id="gameStats" class="small text-muted">
+                                <div>총 카드: <span id="totalCards" class="text-white">0</span></div>
+                                <div>활성 카드: <span id="activeCards" class="text-white">0</span></div>
+                                <div>완료된 카드: <span id="completedCards" class="text-white">0</span></div>
+                                <div>실패한 카드: <span id="failedCards" class="text-white">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- N/B 길드 정보 섹션 -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="text-white">🏛️ N/B 길드 정보</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="small text-muted">
+                                        <div>Profit: <span id="nbProfit" class="text-white">0.0%</span></div>
+                                        <div>Loss: <span id="nbLoss" class="text-white">100.0%</span></div>
+                                        <div>AutoTrade Readiness: <span id="nbAutoTrade" class="text-white">100%</span></div>
+                                        <div>Information Trust Level: <span id="nbTrustLevel" class="text-white">N/B Favored</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="small text-muted">
+                                        <div>🤖 ML Model Trust: <span id="mlTrust" class="text-white">40%</span></div>
+                                        <div>🏛️ N/B Guild Trust: <span id="nbGuildTrust" class="text-white">82%</span></div>
+                                        <div>Trust Balance: <span id="trustBalance" class="text-white">ML: 40% | N/B: 82%</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="small text-muted">Visible chart zones (left=older → right=newer)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://unpkg.com/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"></script>
+<script src="/static/mayor-guidance.js?v=dev"></script>
+<script src="/static/village-trading-process.js?v=dev"></script>
+<script src="/static/trainer-system.js?v=dev"></script>
+<script src="/static/village-learning-system.js?v=dev"></script>
+<script src="/static/guild-members-status.js?v=dev"></script>
+<script src="/static/ui.js?v=dev"></script>
