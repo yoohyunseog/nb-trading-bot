@@ -1,53 +1,57 @@
 @echo off
-chcp 65001 >nul
 echo ========================================
-echo 8BIT Bot Server 실행
+echo 8BIT Bot Server Start
 echo ========================================
 echo.
 
-REM 가상환경 활성화
-echo [1/2] 가상환경 활성화 중...
+REM Activate virtual environment
+echo [1/2] Activating virtual environment...
 if exist "E:\python_env\Scripts\activate.bat" (
     call "E:\python_env\Scripts\activate.bat"
-    echo 가상환경 활성화: E:\python_env
+    echo Virtual environment activated: E:\python_env
 ) else if exist "..\python_env\Scripts\activate.bat" (
     call "..\python_env\Scripts\activate.bat"
-    echo 가상환경 활성화: ..\python_env
+    echo Virtual environment activated: ..\python_env
 ) else if exist "python_env\Scripts\activate.bat" (
     call "python_env\Scripts\activate.bat"
-    echo 가상환경 활성화: python_env
+    echo Virtual environment activated: python_env
 ) else (
-    echo [경고] 가상환경을 찾을 수 없습니다. 시스템 Python을 사용합니다.
+    echo [WARNING] Virtual environment not found. Using system Python.
 )
 echo.
 
-REM 작업 디렉토리로 이동
-echo [2/2] 작업 디렉토리로 이동 중...
+REM Change to working directory
+echo [2/2] Changing to working directory...
 cd /d "%~dp0"
-echo 현재 디렉토리: %CD%
+echo Current directory: %CD%
 echo.
 
-REM Python 버전 확인
-echo Python 버전 확인 중...
+REM Check Python version
+echo Checking Python version...
 python --version
 if errorlevel 1 (
-    echo [오류] Python을 찾을 수 없습니다.
+    echo [ERROR] Python not found.
     pause
     exit /b 1
 )
 echo.
 
-REM Server 실행
+REM Run server
 echo ========================================
-echo Server 실행 중...
+echo Starting Server...
 echo ========================================
 echo.
 python server.py
 
-REM 프로그램 종료 후
+REM After program termination
 if errorlevel 1 (
     echo.
-    echo [오류] Server 실행 중 오류가 발생했습니다.
+    echo [ERROR] Server encountered an error.
     pause
+    exit /b 1
 )
+
+echo.
+echo Server stopped normally.
+pause
 

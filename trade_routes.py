@@ -299,38 +299,80 @@ def register_trade_routes(app, env: Dict[str, Any]):
             attempt_krw = int(krw)
             attempt_size = 0.0
         o = trader.place('BUY', price)
+        
+        # NBverse 파일을 buy_cards에 복사 (매수 시점의 전체 카드 정보 보관)
+        nbverse_buy_order = None
+        try:
+            if nb_price_max:
+                # NBverse 경로 생성 (server.py의 create_nb_path와 동일)
+                nb_str = str(nb_price_max)
+                if '.' in nb_str:
+                    int_part, dec_part = nb_str.split('.', 1)
+                else:
+                    int_part, dec_part = nb_str, ''
+                int_part = int_part.replace('-', '')
+                dec_part = dec_part.replace('-', '')
+                path_parts = [int_part] + list(dec_part)
+                nb_path = os.path.join(*path_parts)
+                
+                nbverse_file = os.path.join('data', 'nbverse', 'max', nb_path, 'this_pocket_card.json')
+                if os.path.exists(nbverse_file):
+                    import json
+                    import shutil
+                    with open(nbverse_file, 'r', encoding='utf-8') as f:
+                        nbverse_data = json.load(f)
+                    
+                    # NBverse 데이터를 order에 병합 (모든 정보 보관)
+                    nbverse_buy_order = nbverse_data
+                    nbverse_buy_order['ts'] = int(time.time()*1000)
+                    nbverse_buy_order['side'] = 'BUY'
+                    nbverse_buy_order['price'] = float(price)
+                    nbverse_buy_order['market'] = market
+                    nbverse_buy_order['paper'] = True if o is None or (not paper and not (isinstance(o, dict) and o.get('live_ok'))) else bool(paper)
+                    nbverse_buy_order['live_ok'] = False if o is None or (not paper and not (isinstance(o, dict) and o.get('live_ok'))) else bool(o.get('live_ok')) if isinstance(o, dict) else False
+                    nbverse_buy_order['insight'] = ins
+                    nbverse_buy_order['size'] = float(fallback_size) if o is None or (not paper and not (isinstance(o, dict) and o.get('live_ok'))) else float(o.get('size') or attempt_size) if isinstance(o, dict) else float(attempt_size)
+                    
+                    logger.info(f"✅ 매수 시점 NBverse 카드 정보 로드: {nbverse_file}")
+        except Exception as e:
+            logger.debug(f"⚠️ 매수 시점 NBverse 파일 로드 실패: {e}")
+        
         if o is None or (not paper and not (isinstance(o, dict) and o.get('live_ok'))):
             try:
                 fallback_size = (float(attempt_krw) / float(price)) if price > 0 else 0.0
             except Exception:
                 fallback_size = 0.0
-            order = {
-                'ts': int(time.time()*1000),
-                'side': 'BUY',
-                'price': float(price),
-                'size': float(fallback_size),
-                'paper': True,
-                'market': market,
-                'live_ok': False,
-                'insight': ins,
-                'fallback': True,
-                'nbverse_path': nbverse_path or None,
-                'nbverse_interval': nbverse_interval or None,
-                'nbverse_timestamp': nbverse_timestamp or None,
-                'nb_price_max': nb_price_max,
-                'nb_price_min': nb_price_min,
-                'nb_price': nb_price,
-                'nb_price_values': nb_price_values,
-                'nb_volume_max': nb_volume_max,
-                'nb_volume_min': nb_volume_min,
-                'nb_volume_values': nb_volume_values,
-                'nb_turnover_max': nb_turnover_max,
-                'nb_turnover_min': nb_turnover_min,
-                'nb_turnover_values': nb_turnover_values,
-                'nb_zone': nb_zone,
-                'nb_r_value': nb_r_value,
-                'nb_w_value': nb_w_value
-            }
+            
+            # NBverse 데이터가 있으면 그걸 사용, 없으면 일반 order 생성
+            if nbverse_buy_order:
+                order = nbverse_buy_order
+            else:
+                order = {
+                    'ts': int(time.time()*1000),
+                    'side': 'BUY',
+                    'price': float(price),
+                    'size': float(fallback_size),
+                    'paper': True,
+                    'market': market,
+                    'live_ok': False,
+                    'insight': ins,
+                    'fallback': True,
+                    'nbverse_interval': nbverse_interval or None,
+                    'nbverse_timestamp': nbverse_timestamp or None,
+                    'nb_price_max': nb_price_max,
+                    'nb_price_min': nb_price_min,
+                    'nb_price': nb_price,
+                    'nb_price_values': nb_price_values,
+                    'nb_volume_max': nb_volume_max,
+                    'nb_volume_min': nb_volume_min,
+                    'nb_volume_values': nb_volume_values,
+                    'nb_turnover_max': nb_turnover_max,
+                    'nb_turnover_min': nb_turnover_min,
+                    'nb_turnover_values': nb_turnover_values,
+                    'nb_zone': nb_zone,
+                    'nb_r_value': nb_r_value,
+                    'nb_w_value': nb_w_value
+                }
             try:
                 orders.append(order)
             except Exception:
@@ -349,7 +391,6 @@ def register_trade_routes(app, env: Dict[str, Any]):
             'market': market,
             'live_ok': bool(o.get('live_ok')) if isinstance(o, dict) else False,
             'insight': ins,
-            'nbverse_path': nbverse_path or None,
             'nbverse_interval': nbverse_interval or None,
             'nbverse_timestamp': nbverse_timestamp or None,
             'nb_price_max': nb_price_max,
@@ -366,6 +407,10 @@ def register_trade_routes(app, env: Dict[str, Any]):
             'nb_r_value': nb_r_value,
             'nb_w_value': nb_w_value
         }
+        
+        # NBverse 데이터가 있으면 그걸 사용
+        if nbverse_buy_order:
+            order = nbverse_buy_order
         try:
             if (not paper) and isinstance(o, dict) and o.get('uuid') and upbit:
                 uuid = o.get('uuid')

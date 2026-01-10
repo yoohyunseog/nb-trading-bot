@@ -40,6 +40,53 @@ const FlowDashboard = (() => {
   let winGradeTrendChart = null;
   let ccSummaryChart = null;
 
+  // Live price polling (updates window.candleDataCache)
+  let livePricePoller = null;
+  function stopLivePricePolling() {
+    try {
+      if (livePricePoller) {
+        clearInterval(livePricePoller);
+        livePricePoller = null;
+      }
+    } catch(_) {}
+  }
+  async function fetchLatestCandle(interval) {
+    try {
+      const tf = interval || state.selectedInterval || 'minute10';
+      const resp = await fetch(`/api/ohlcv?interval=${encodeURIComponent(tf)}&count=1`);
+      const json = await resp.json();
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      const last = rows[rows.length - 1];
+      if (last && Number.isFinite(Number(last.close))) {
+        const candle = {
+          time: Math.floor(Number(last.time) / 1000),
+          open: Number(last.open || 0),
+          high: Number(last.high || 0),
+          low: Number(last.low || 0),
+          close: Number(last.close || 0)
+        };
+        return candle;
+      }
+      return null;
+    } catch(_) { return null; }
+  }
+  function startLivePricePolling(interval) {
+    stopLivePricePolling();
+    const tf = interval || state.selectedInterval || 'minute10';
+    livePricePoller = setInterval(async () => {
+      const latest = await fetchLatestCandle(tf);
+      if (!latest) return;
+      try {
+        if (!Array.isArray(window.candleDataCache)) window.candleDataCache = [];
+        window.candleDataCache.push(latest);
+        // keep recent window to avoid unbounded growth
+        if (window.candleDataCache.length > 600) {
+          window.candleDataCache = window.candleDataCache.slice(-600);
+        }
+      } catch(_) {}
+    }, 3000); // poll every 3s to keep UI fresh without overloading API
+  }
+
   // Prefix API paths with optional base (for proxy/local usage)
   function withApiBase(path) {
     const base = window.API_BASE || '';
@@ -218,8 +265,13 @@ const FlowDashboard = (() => {
       const ratingDisplay = document.getElementById('ccRatingDisplay');
       const ratingScore = document.getElementById('ccRatingScore');
       const ratingSection = document.getElementById('ccRatingSection');
+      
+      // 부호 결정: 현재 zone 기반 (nbLastZone)
+      const currentZone = String(params.nbLastZone || '').toUpperCase();
+      const enhancementSign = (currentZone === 'BLUE') ? '+' : (currentZone === 'ORANGE') ? '-' : '+';
+      
       if (ratingDisplay && ratingScore && ratingSection) {
-        ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
+        ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">${enhancementSign}${res.enhancement}강</span>`;
         ratingScore.innerHTML = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''}`;
         ratingSection.style.background = `linear-gradient(135deg, rgba(0,0,0,0.3), ${res.color}22)`;
         ratingSection.style.borderColor = `${res.color}44`;
@@ -227,13 +279,14 @@ const FlowDashboard = (() => {
       ccCurrentRating = res;
       window.ccCurrentRating = res;
 
-      if (ccCurrentData) {
+      // ccCurrentData 존재 여부 확인 (초기화되지 않았을 수 있음)
+      if (typeof window.ccCurrentData === 'object' && window.ccCurrentData) {
         requestMlRating(ccCurrentData, (ml) => {
           ccCurrentRating.mlGrade = ml.grade;
           ccCurrentRating.mlEnhancement = ml.enhancement;
           if (ratingDisplay && ratingScore) {
-            ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">+${res.enhancement}강</span>`;
-            ratingScore.innerHTML = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''} | ML ${ml.grade} +${ml.enhancement}강`;
+            ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">${enhancementSign}${res.enhancement}강</span>`;
+            ratingScore.innerHTML = `${res.league} ${res.group}${res.super ? ' • SUPER' : ''} | ML ${ml.grade} ${enhancementSign}${ml.enhancement}강`;
           }
         });
       }
@@ -480,8 +533,12 @@ const FlowDashboard = (() => {
         const zoneBg = s.zone === 'BLUE' ? 'rgba(0,209,255,0.10)' : s.zone === 'ORANGE' ? 'rgba(255,183,3,0.10)' : 'rgba(255,255,255,0.04)';
         const zoneLabel = s.zone === 'BLUE' ? '🔵 BLUE' : s.zone === 'ORANGE' ? '🟠 ORANGE' : '⚪ NONE';
         const tfLabel = tfMap[s.tf] || s.tf || '10m';
-        const enhLabel = s.enhancement ? `+${s.enhancement}강` : '';
-        const mlLabel = s.mlGrade ? `ML ${s.mlGrade}${s.mlEnhancement ? ` +${s.mlEnhancement}강` : ''}` : '';
+        // ORANGE면 마이너스(-), BLUE면 플러스(+)
+        const enhPrefix = s.zone === 'ORANGE' ? '-' : '+';
+        const enhLabel = s.enhancement ? `${enhPrefix}${s.enhancement}강` : '';
+        // ML 등급도 ORANGE면 마이너스(-)
+        const mlEnhPrefix = s.zone === 'ORANGE' ? '-' : '+';
+        const mlLabel = s.mlGrade ? `ML ${s.mlGrade}${s.mlEnhancement ? ` ${mlEnhPrefix}${s.mlEnhancement}강` : ''}` : '';
         const priceLabel = s.price != null ? `₩${Number(s.price||0).toLocaleString()}` : '-';
         // N/B WAVE: display both waveR (BLUE) and waveW (ORANGE) like top N/B WAVE STATUS
         const waveRLabel = s.waveR != null ? Number(s.waveR).toFixed(3) : '-';
@@ -497,7 +554,7 @@ const FlowDashboard = (() => {
               <div style="color:${zoneColor}; font-weight:700; font-size:11px;">${priceLabel}</div>
             </div>
             <div style="display:flex; justify-content:space-between; width:100%; font-size:11px; color:#9aa8c2; margin-bottom:4px;">
-              <span>${s.league || ''} ${s.group || ''}${s.super ? ' • SUPER' : ''}</span>
+              <span>${s.league || ''} ${s.group || ''}${s.super ? ' • SUPER' : ''}${mlLabel ? ' | ' + mlLabel : ''}</span>
               <span style="font-weight:700;">
                 <span style="color:#00d1ff;">🔵 ${waveRLabel}</span>
                 <span style="margin:0 4px;">|</span>
@@ -763,11 +820,11 @@ const FlowDashboard = (() => {
         coin: ccCurrentData.market || null,
         card_rating: ccCurrentRating || {},
           nb_zone: {
-          zone: document.getElementById('ccNBZone')?.textContent || '-',
-          zone_flag: ccCurrentData.zone_flag,
-          zone_conf: ccCurrentData.zone_conf,
-          dist_high: ccCurrentData.dist_high,
-          dist_low: ccCurrentData.dist_low
+          zone: ccCurrentData.zone || state.currentZone || 'NONE',
+          zone_flag: ccCurrentData.zone_flag || 0,
+          zone_conf: ccCurrentData.zone_conf || 0.0,
+          dist_high: ccCurrentData.dist_high || 0.0,
+          dist_low: ccCurrentData.dist_low || 0.0
         },
         ml_trust: {
           grade: document.getElementById('ccMlGrade')?.textContent || '-',
@@ -798,11 +855,66 @@ const FlowDashboard = (() => {
         console.log('✅ 자동 저장 완료:', savePayload.interval, `(${result.count || 1}개 경로)`);
         const hint = document.getElementById('ccSaveHint');
         if (hint) hint.textContent = `✅ 저장 완료 (${result.count || 1}개)`;
+        
+        // 온라인 학습 트리거: 카드 등급 + 강화도 저장
+        if (ccCurrentRating && ccCurrentRating.enhancement) {
+          triggerAutoTraining(ccCurrentData, ccCurrentRating.enhancement);
+        }
       } else {
         console.warn('⚠️ 자동 저장 실패:', result?.error || 'Unknown');
       }
     } catch (err) {
       console.warn('⚠️ 자동 저장 에러:', err?.message);
+    }
+  }
+
+  async function triggerAutoTraining(cardData, enhancement) {
+    /**
+     * ML 자동 온라인 학습 트리거
+     * 1. 가장 최근 nbverse 카드와 현재 가격 비교로 실제 수익률 계산
+     * 2. 이전 카드 훈련 + 현재 카드 AI 예측
+     */
+    try {
+      const trainPayload = {
+        card: cardData,
+        current_price: cardData.current_price,
+        interval: cardData.interval
+      };
+      
+      const response = await fetch('/api/ml/rating/auto-train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trainPayload)
+      });
+      
+      if (!response.ok) {
+        console.warn('[Auto-Train] API error:', response.status);
+        return;
+      }
+      
+      const result = await response.json();
+      if (result.ok) {
+        // 실제 수익률로 훈련
+        if (result.actual_profit_rate !== undefined) {
+          console.log('[Auto-Train] ✓ Prev card trained, profit_rate:', (result.actual_profit_rate * 100).toFixed(2) + '%');
+        }
+        
+        // 현재 카드 AI 예측 받기
+        if (result.current_prediction) {
+          const pred = result.current_prediction;
+          console.log('[Auto-Train] 🤖 AI prediction:', pred.grade, `+${pred.enhancement}강 (${pred.method})`);
+          window.aiPredictionResult = pred;
+        }
+        
+        // 전체 재훈련 완료
+        if (result.full_retrain) {
+          console.log('[Auto-Train] ✓ Full retrain:', result.full_retrain.train_count, 'samples, MAE:', result.full_retrain.mae.toFixed(2));
+        }
+      } else {
+        console.debug('[Auto-Train] No action:', result.error || 'unknown');
+      }
+    } catch (err) {
+      console.debug('[Auto-Train] Error:', err?.message);
     }
   }
 
@@ -1245,6 +1357,14 @@ const FlowDashboard = (() => {
         candleSeries.setData(sortedCandles);
         volumeSeries.setData(volumeData);
 
+        // Initialize global candle cache for live UI updates
+        try {
+          window.candleDataCache = Array.isArray(sortedCandles) ? sortedCandles.slice() : [];
+        } catch(_) {}
+
+        // Start live polling for latest candle to keep current price moving
+        try { startLivePricePolling(state.selectedInterval); } catch(_) {}
+
         // --- N/B wave overlay using server API ---
         this.renderNBWaveFromAPI(chart, state.selectedInterval).catch(err => {
           console.warn('N/B Wave API failed, falling back to client calculation:', err);
@@ -1618,7 +1738,18 @@ const FlowDashboard = (() => {
             volume: { max: volume.max, min: volume.min, values: volume.values || [] },
             turnover: { max: turnover.max, min: turnover.min, values: turnover.values || [] }
           },
-          chart: chart || []
+          chart: chart || [],
+          // Add zone and wave data for nbverse save
+          zone: state.currentZone || 'NONE',
+          zone_flag: (state.currentZone === 'BLUE') ? 1 : (state.currentZone === 'ORANGE') ? -1 : 0,
+          zone_conf: 0.0,
+          dist_high: 0.0,
+          dist_low: 0.0,
+          r: waveR,
+          w: waveW,
+          ema_diff: 0.0,
+          pct_blue: nbStats.blueCount || 0,
+          pct_orange: nbStats.orangeCount || 0
         };
         window.ccCurrentData = ccCurrentData;
 
@@ -2853,50 +2984,258 @@ async function loadAssets7() {
 }
 
 // ============================================================================
+// 헬퍼: Step 8 상세 진행 메시지 업데이트
+// ============================================================================
+function updateStep8Status(subStep, message) {
+  const statusEl = document.getElementById('systemStatus');
+  if (statusEl) {
+    statusEl.textContent = `Step 8-${subStep}: ${message}`;
+  }
+  console.log(`📍 Step 8-${subStep}: ${message}`);
+}
+
+// ============================================================================
 // Step 8: 매수 완료 카드
 // ============================================================================
 
 async function loadBuyCards8() {
+  let buyOrders = [];
+  let processStep = 1;
+  const UPBIT_FEE = 0.001; // 업비트 0.1% 수수료
+  const startTime = Date.now();
+  const MIN_DURATION = 1000; // 최소 1초 유지
+  
   try {
     const now = new Date().toLocaleTimeString('ko-KR');
     document.getElementById('buyStatsTime').textContent = now;
-    
-    // 파일에서 매수 카드 로드
-    let buyOrders = [];
-    
-    try {
-      const buyRes = await fetch('/api/cards/buy');
-      const buyData = await buyRes.json();
-      if (buyData && buyData.ok) {
-        buyOrders = buyData.cards || [];
-      }
-    } catch (e) {
-      console.error('Failed to load buy cards:', e);
-      try {
-        const cachedBuyOrders = localStorage.getItem('buyOrdersCache');
-        if (cachedBuyOrders) {
-          buyOrders = JSON.parse(cachedBuyOrders);
-          console.log('💾 캐시에서 매수 카드 복원:', buyOrders.length, '개');
+
+    // ============================================================================
+    // Step 8-1: 매수 된 카드 목록 갱신
+    // ============================================================================
+    switch (processStep) {
+      case 1:
+        updateStep8Status(1, '매수 카드 목록 조회 중...');
+        try {
+          const buyRes = await fetch('/api/cards/buy');
+          const buyData = await buyRes.json();
+          if (buyData && buyData.ok) {
+            buyOrders = buyData.cards || [];
+          }
+        } catch (e) {
+          console.error('Failed to load buy cards:', e);
+          try {
+            const cachedBuyOrders = localStorage.getItem('buyOrdersCache');
+            if (cachedBuyOrders) {
+              buyOrders = JSON.parse(cachedBuyOrders);
+              console.log('💾 캐시에서 매수 카드 복원:', buyOrders.length, '개');
+            }
+          } catch (_) {}
         }
-      } catch (_) {}
+        
+        document.getElementById('buyCount').textContent = buyOrders.length;
+        updateStep8Status(1, `매수 카드 목록 갱신 완료 ✅ (${buyOrders.length}개)`);
+        processStep++;
+        
+        // ============================================================================
+        // Step 8-2: 갱신된 카드 정보에서 가장 최근 순서부터 가격 기반 max 값 가져오기
+        // ============================================================================
+      case 2:
+        updateStep8Status(2, '최근 순서로 정렬 중...');
+        // 최신 순서로 정렬 (시간 내림차순)
+        buyOrders.sort((a, b) => {
+          const timeA = new Date(a.time || a.ts || 0).getTime();
+          const timeB = new Date(b.time || b.ts || 0).getTime();
+          return timeB - timeA;
+        });
+        updateStep8Status(2, `최근 순서 정렬 완료 ✅ (${buyOrders.length}개)`);
+        processStep++;
+
+        // ============================================================================
+        // Step 8-3: NBverse API로 max 값 조회 (경로 사용 금지)
+        // ============================================================================
+      case 3:
+        updateStep8Status(3, `NBverse 조회 중 (0/${buyOrders.length})...`);
+
+        let nbSuccessCount = 0;
+        buyOrders = await Promise.all(
+          buyOrders.map(async (order, idx) => {
+            try {
+              // nb_price_max를 우선, 없으면 price 사용
+              const nbValue = Number(order.nb_price_max || order.price || 0);
+              if (!nbValue) {
+                order.nbverse_updated = false;
+                return order;
+              }
+
+              const nbResult = await window.API?.loadNbverseByNb(nbValue, 'max');
+
+              if (nbResult?.ok && nbResult.data) {
+                const nbData = nbResult.data;
+                order.nbverse_data = nbData;
+                order.nb_price = nbData.nb_value ?? nbData.nb ?? order.nb_price_max ?? order.nb_price;
+                order.nb_price_max = nbData.nb_value ?? order.nb_price_max;
+                order.nb_price_min = nbData.nb_price_min ?? order.nb_price_min;
+                order.nb_volume = nbData.volume ?? order.nb_volume;
+                order.nb_zone = nbData.zone ?? order.nb_zone;
+                // 카드 등급 정보가 응답에 포함되면 그대로 반영
+                if (nbData.card_rating) {
+                  order.card_rating = nbData.card_rating;
+                } else if (nbData.card?.card_rating) {
+                  order.card_rating = nbData.card.card_rating;
+                }
+                if (nbData.rating_score !== undefined) {
+                  order.rating_score = nbData.rating_score;
+                } else if (nbData.card?.card_rating?.enhancement !== undefined) {
+                  order.rating_score = nbData.card.card_rating.enhancement;
+                }
+                order.nbverse_updated = true;
+                order.nbverse_timestamp = new Date().toISOString();
+                nbSuccessCount += 1;
+                updateStep8Status(3, `NBverse 조회 중 (${nbSuccessCount}/${buyOrders.length})...`);
+                console.log(`  ✓ 카드#${idx+1} NBverse 업데이트 성공:`, { price: nbValue, nb: order.nb_price });
+              } else {
+                // NBverse 조회 실패 시 기본값으로 대체 (nb_price 없으면 현재 가격 사용)
+                if (!order.nb_price) {
+                  order.nb_price = nbValue;
+                  console.log(`  ⚠ 카드#${idx+1} NBverse 조회 실패, 현재가로 대체 (${nbValue})`);
+                } else {
+                  console.warn(`  ⚠ 카드#${idx+1} NBverse 조회 실패 (nb_value: ${nbValue}), 기존 nb_price 유지`);
+                }
+                order.nbverse_updated = false;
+              }
+            } catch (e) {
+              order.nbverse_updated = false;
+              console.error(`  ❌ 카드#${idx+1} NBverse 조회 오류:`, e?.message);
+            }
+            return order;
+          })
+        );
+
+        const updatedNb = buyOrders.filter(o => o.nbverse_updated === true).length;
+        updateStep8Status(3, `NBverse 조회 완료 ✅ (${updatedNb}/${buyOrders.length})`);
+        processStep++;
+
+        // ============================================================================
+        // Step 8-4: 모든 매수 된 카드의 데이터 업데이트 확인
+        // ============================================================================
+      case 4:
+        updateStep8Status(4, '카드 데이터 검증 중...');
+        const updatedCount = buyOrders.filter(o => o.nbverse_updated === true).length;
+        const failedCount = buyOrders.filter(o => o.nbverse_updated === false).length;
+        
+        updateStep8Status(4, `카드 데이터 검증 완료 ✅ (성공: ${updatedCount}개, 실패: ${failedCount}개)`);
+        
+        if (buyOrders.length > 0 && updatedCount === 0) {
+          console.warn('⚠️ 모든 카드 NBverse 업데이트 실패, 기존 데이터 사용');
+        }
+        processStep++;
+
+        // ============================================================================
+        // Step 8-5: 매수 된 카드의 손익 업데이트 (업비트 0.1% 수수료 포함)
+        // ============================================================================
+      case 5:
+        updateStep8Status(5, '손익 계산 중...');
+        // 현재가(최신 캔들의 종가) 추출
+        let currentPrice = 0;
+        try {
+          const lastCandle = (window.candleDataCache || []).slice(-1)[0];
+          currentPrice = Number(lastCandle?.close || lastCandle?.value || 0) || 0;
+        } catch (_) { }
+        
+        if (currentPrice <= 0 && buyOrders.length > 0) {
+          currentPrice = Number(buyOrders[0]?.price || 0) || 0;
+        }
+
+        // 여전히 0이면 서버에서 최신가 한 번 더 조회 (보안상 API 경유)
+        if (currentPrice <= 0) {
+          try {
+            const interval = window.FlowDashboard?.state?.selectedInterval || 'minute10';
+            const chartResp = await API.getChartData(interval);
+            const rows = Array.isArray(chartResp?.data) ? chartResp.data : [];
+            const last = rows[rows.length - 1];
+            const apiClose = Number(last?.close || 0) || 0;
+            if (apiClose > 0) currentPrice = apiClose;
+          } catch (e) {
+            console.warn('최신가 API 조회 실패:', e?.message);
+          }
+        }
+
+        let totalPnL = 0;
+        buyOrders = buyOrders.map((order, idx) => {
+          const buyPrice = Number(order.price || 0);
+          const quantity = Number(order.size || 0);
+          
+          // 수수료 적용 (진입가, 청산가)
+          const entryPrice = buyPrice * (1 + UPBIT_FEE); // 진입 시 수수료 추가
+          const exitPrice = currentPrice * (1 - UPBIT_FEE); // 청산 시 수수료 차감
+          
+          // 손익 계산
+          const purchaseAmount = buyPrice * quantity; // 실제 구매액
+          const currentValue = currentPrice * quantity; // 현재가치
+          const pnlBeforeFee = currentValue - purchaseAmount; // 수수료 전 손익
+          const totalFee = (buyPrice * quantity * UPBIT_FEE) + (currentPrice * quantity * UPBIT_FEE);
+          const pnlAfterFee = pnlBeforeFee - totalFee; // 수수료 후 손익
+          const pnlRate = purchaseAmount > 0 ? (pnlAfterFee / purchaseAmount) * 100 : 0;
+          
+          order.current_price = currentPrice;
+          order.purchase_amount = purchaseAmount;
+          order.current_value = currentValue;
+          order.pnl_before_fee = pnlBeforeFee;
+          order.total_fee = totalFee;
+          order.pnl = pnlAfterFee;
+          order.pnl_rate = pnlRate;
+          order.pnl_updated = true;
+          order.pnl_timestamp = new Date().toISOString();
+          
+          totalPnL += pnlAfterFee;
+          
+          if (idx < 3) { // 첫 3개만 로그
+            console.log(`  카드#${idx+1} 손익: ${pnlAfterFee.toFixed(0)}원 (${pnlRate.toFixed(2)}%) | 수수료: ${totalFee.toFixed(0)}원`);
+          }
+          
+          return order;
+        });
+        
+        updateStep8Status(5, `손익 업데이트 완료 ✅ (총: ${totalPnL.toFixed(0)}원)`);
+        processStep++;
+        break;
     }
 
-    // 매수 통계
-    document.getElementById('buyCount').textContent = buyOrders.length;
-
+    // ============================================================================
+    // 최종: 렌더링 및 반환
+    // ============================================================================
     const hasBuyCards = Array.isArray(buyOrders) && buyOrders.length > 0;
-
-    // 현재 interval 가져오기
     const currentInterval = window.FlowDashboard?.state?.selectedInterval || 'minute10';
     
-    // 매수 내역 목록 렌더링
-    await renderBuyOrderList(buyOrders, currentInterval);
-
-    console.log('✅ Step 8 - 매수 카드 완료:', { buyCount: buyOrders.length, hasBuyCards });
+    if (hasBuyCards) {
+      await renderBuyOrderList(buyOrders, currentInterval);
+    }
+    
+    // 최소 1초 유지 (진행 상황 시각화)
+    const elapsedTime = Date.now() - startTime;
+    if (elapsedTime < MIN_DURATION) {
+      updateStep8Status('완료', '작업 정리 중...');
+      await new Promise(resolve => setTimeout(resolve, MIN_DURATION - elapsedTime));
+    }
+    
+    const loadedNbverse = buyOrders.some(o => o.nbverse_updated === true);
+    const totalPnL = buyOrders.reduce((sum, o) => sum + (o.pnl || 0), 0).toFixed(0);
+    const finalDuration = Date.now() - startTime;
+    
+    updateStep8Status('완료', `매수 카드 처리 완료 ✅ (${buyOrders.length}개, ${totalPnL}원, ${finalDuration}ms)`);
+    
+    console.log('✅ Step 8 - 매수 카드 처리 완료:', { 
+      buyCount: buyOrders.length, 
+      hasBuyCards, 
+      loadedNbverse,
+      totalPnL,
+      duration: `${finalDuration}ms`
+    });
+    
     return { hasBuyCards, loadedNbverse };
+    
   } catch (err) {
-    console.error('loadBuyCards8 error:', err);
-    // 상위에서 메시지를 표시할 수 있도록 에러를 전달
+    console.error(`❌ loadBuyCards8 Step ${processStep} error:`, err);
     throw err;
   }
 }
@@ -3102,7 +3441,7 @@ async function renderBuyOrderList(orders, interval) {
   const tfLabel = tfMap[tfi] || tfi;
 
   // 최신가(현재가) 추출: 차트 캐시 → 첫 매수 가격
-  const latestPrice = (() => {
+  let latestPrice = (() => {
     let p = 0;
     try {
       const lastCandle = (window.candleDataCache || []).slice(-1)[0];
@@ -3131,67 +3470,136 @@ async function renderBuyOrderList(orders, interval) {
     const time = o.time ? new Date(o.time).toLocaleString('ko-KR') : (o.ts ? new Date(o.ts).toLocaleString('ko-KR') : '-');
     
     // N/B 데이터 (조회된 NBverse 정보 우선 사용)
-    const nbPrice = nbverseInfo?.nbPrice || o.nb_price || o.nbPrice || '-';
-    const nbVolume = nbverseInfo?.currentVolume || o.nb_volume || o.nbVolume || '-';
-    const nbInterval = nbverseInfo?.interval || o.nbverse_interval || tfLabel;
+    const nbPriceOld = o.nb_price || nbverseInfo?.nbPrice || o.nbPrice || '-';
+    const nbVolume = o.nb_volume || nbverseInfo?.currentVolume || o.nbVolume || '-';
+    const nbInterval = o.nbverse_interval || nbverseInfo?.interval || tfLabel;
     
-    // 카드 등급 (NBverse 정보로 계산)
-    let rating = o.card_rating || o.cardRating || '-';
-    let ratingScore = o.rating_score || o.ratingScore || '-';
-    
-    if (nbverseInfo && nbverseInfo.nbPrice !== '-') {
-      const nbVal = parseFloat(nbverseInfo.nbPrice);
-      if (nbVal < 0.3) {
-        rating = 'SSS급';
-        ratingScore = '95+';
-      } else if (nbVal < 0.5) {
-        rating = 'SS급';
-        ratingScore = '85-94';
-      } else if (nbVal < 0.7) {
-        rating = 'S급';
-        ratingScore = '75-84';
-      } else if (nbVal < 1.0) {
-        rating = 'A급';
-        ratingScore = '65-74';
-      } else {
-        rating = 'B급';
-        ratingScore = '50-64';
+    // 카드 등급: 우선 card_rating 객체의 code/league/enhancement 사용, 없으면 NB값으로 산정
+    let rating = '-';
+    let ratingScore = '-';
+    let ratingDetail = '-';
+    let mlRating = '';
+
+    const cardRatingObj = (
+      o.card_rating || o.cardRating ||
+      (o.nbverse_data && (o.nbverse_data.card_rating || o.nbverse_data.card?.card_rating))
+    );
+    if (cardRatingObj && typeof cardRatingObj === 'object') {
+      rating = cardRatingObj.code || cardRatingObj.league || rating;
+      if (cardRatingObj.enhancement !== undefined && cardRatingObj.enhancement !== null) {
+        ratingScore = String(cardRatingObj.enhancement);
+      } else if (cardRatingObj.bias !== undefined && cardRatingObj.bias !== null) {
+        ratingScore = `${(cardRatingObj.bias * 100).toFixed(1)}%`;
+      } else if (cardRatingObj.magnitudeBoost !== undefined && cardRatingObj.magnitudeBoost !== null) {
+        ratingScore = cardRatingObj.magnitudeBoost.toFixed(1);
       }
+      // 리그/그룹 정보
+      if (cardRatingObj.league) {
+        ratingDetail = cardRatingObj.league;
+        if (cardRatingObj.group) ratingDetail += ` ${cardRatingObj.group}`;
+      }
+    } else if (o.rating_score || o.ratingScore) {
+      ratingScore = o.rating_score || o.ratingScore;
+      rating = o.card_rating || o.cardRating || rating;
+    }
+
+    // 강화 수치 부호: BLUE(+1) → +, ORANGE(-1) → -
+    // 우선순위: 현재 zone > zone_flag > nb_zone
+    let zoneForSign = o.nb_zone?.zone || o.nb_zone || o.insight?.zone || '';
+    if (!zoneForSign && o.insight?.zone_flag) {
+      zoneForSign = o.insight.zone_flag > 0 ? 'BLUE' : 'ORANGE';
+    }
+    const parsedScore = Number(ratingScore);
+    if (!Number.isNaN(parsedScore) && typeof zoneForSign === 'string') {
+      const sign = zoneForSign.toUpperCase() === 'BLUE' ? '+' : (zoneForSign.toUpperCase() === 'ORANGE' ? '-' : '');
+      ratingScore = `${sign}${parsedScore}`;
+    }
+
+    // ML 등급 표시 (등급이 "-"가 아니고 유효한 경우만)
+    if (o.mlGrade && o.mlGrade !== '-' && o.mlGrade !== '' && typeof zoneForSign === 'string') {
+      const mlSign = zoneForSign.toUpperCase() === 'BLUE' ? '+' : (zoneForSign.toUpperCase() === 'ORANGE' ? '-' : '');
+      const mlEnh = o.mlEnhancement && o.mlEnhancement !== '0' ? ` ${mlSign}${o.mlEnhancement}강` : '';
+      mlRating = `ML ${o.mlGrade}${mlEnh}`;
+    }
+
+    // NB 값 기반 보정 (card_rating 없을 때만)
+    if (rating === '-' && nbPriceOld !== '-') {
+      const nbVal = parseFloat(nbPriceOld);
+      let nbScore = '';
+      if (nbVal < 0.3) { rating = 'SSS'; nbScore = 95; }
+      else if (nbVal < 0.5) { rating = 'SS'; nbScore = 85; }
+      else if (nbVal < 0.7) { rating = 'S'; nbScore = 75; }
+      else if (nbVal < 1.0) { rating = 'A'; nbScore = 65; }
+      else { rating = 'B'; nbScore = 50; }
+      
+      // NB 값 기반 점수에도 부호 추가
+      const sign = zoneForSign.toUpperCase() === 'BLUE' ? '+' : (zoneForSign.toUpperCase() === 'ORANGE' ? '-' : '');
+      ratingScore = `${sign}${nbScore}`;
+      ratingDetail = 'NBverse 기반';
     }
     
     // Zone & Trust
-    const zone = o.insight?.zone || o.nb_zone || o.nbZone || '-';
-    const nbZone = zone !== '-' ? `${zone} (${nbInterval})` : '-';
-    const mlTrust = o.ml_trust || o.mlTrust || '-';
+    // Trust/Zone 표시는 제외
+    const zone = '-';
+    const nbZone = '-';
+    const mlTrust = '-';
 
-    // 손익 계산
+    // 손익 계산 (0.1% 수수료 포함)
     const cost = price * size;
+    const buyFee = cost * 0.001; // 매수 수수료 0.1%
+    const totalCost = cost + buyFee;
+    
     const currentValue = latestPrice * size;
-    const pnl = currentValue - cost;
-    const pnlRate = cost > 0 ? (pnl / cost) * 100 : 0;
+    const sellFee = currentValue * 0.001; // 매도 수수료 0.1%
+    const totalSellValue = currentValue - sellFee;
+    
+    const pnl = totalSellValue - totalCost;
+    const pnlRate = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
     const pnlColor = pnl >= 0 ? '#0ecb81' : '#f6465d';
     const pnlSign = pnl > 0 ? '+' : '';
     const lossAmount = pnl < 0 ? pnl : 0;
     const lossRate = pnl < 0 ? pnlRate : 0;
     const lossColor = lossAmount < 0 ? '#f6465d' : '#9aa8c2';
 
-    // 추가 N/B 메트릭 (가용 필드 최대 활용)
-    const priceMax = o.insight?.zone_max_price ?? o.nb_price_max ?? nbverseInfo?.nbPriceMax ?? '-';
-    const priceMin = o.insight?.zone_min_price ?? o.nb_price_min ?? nbverseInfo?.nbPriceMin ?? '-';
-    const volMax = o.insight?.vol_max ?? o.nb_volume_max ?? '-';
-    const volMin = o.insight?.vol_min ?? o.nb_volume_min ?? '-';
-    const turnMax = o.insight?.turn_max ?? o.nb_turnover_max ?? '-';
-    const turnMin = o.insight?.turn_min ?? o.nb_turnover_min ?? '-';
+    // 추가 N/B 메트릭 (Step 2와 동일하게 nb 객체에서 추출)
+    // NBverse에서 저장한 nb 객체 구조: nb.price.max/min, nb.volume.max/min, nb.turnover.max/min
+    const nb = o.nb || {};
+    const nbPrice = nb.price || {};
+    const volume = nb.volume || {};
+    const turnover = nb.turnover || {};
+    const fmt = (v) => (v == null ? '-' : Number(v).toFixed(10));
 
-    const bluePct = Number(o.insight?.pct_blue ?? o.insight?.pct_blue_raw ?? 0);
-    const orangePct = Number(o.insight?.pct_orange ?? o.insight?.pct_orange_raw ?? 0);
-    const waveBars = (() => {
-      const totalBars = 80;
-      const orangeBars = Math.round((orangePct / 100) * totalBars);
-      return Array.from({ length: totalBars }, (_, i) => i < orangeBars);
+    const priceMax = fmt(nbPrice.max);
+    const priceMin = fmt(nbPrice.min);
+    const volMax = fmt(volume.max);
+    const volMin = fmt(volume.min);
+    const turnMax = fmt(turnover.max);
+    const turnMin = fmt(turnover.min);
+
+    // NB wave: Live (현재 시장 데이터) & Snapshot (매수 시점)
+    const waveBarsLive = (() => {
+      try {
+        const candles = (window.candleDataCache || []).slice(-80);
+        const vals = candles.map(c => Number(c?.close ?? c?.value ?? 0)).filter(v => isFinite(v) && v > 0);
+        if (vals.length >= 5) {
+          const minV = Math.min(...vals);
+          const maxV = Math.max(...vals);
+          const denom = (maxV - minV) || 1;
+          return vals.map(v => (v - minV) / denom); // 0~1
+        }
+      } catch(_) {}
+      return [];
+    })();
+    const waveBarsSnap = (() => {
+      const snapVals = Array.isArray(nbPrice.values) ? nbPrice.values.slice(-80) : [];
+      if (!snapVals.length) return [];
+      const smin = Math.min(...snapVals);
+      const smax = Math.max(...snapVals);
+      const sden = (smax - smin) || 1;
+      return snapVals.map(v => (v - smin) / sden);
     })();
 
-    return `<div class="card-generation-box" style="background: linear-gradient(135deg, rgba(30,35,41,0.9), rgba(14,20,36,0.9)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+    return `<div class="card-generation-box" style="background: linear-gradient(135deg, rgba(30,35,41,0.9), rgba(14,20,36,0.9)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;" data-buy-card="${idx}">
       <!-- 헤더 -->
       <div class="d-flex justify-content-between align-items-center mb-1" style="border-bottom: 2px solid rgba(0,209,255,0.3); padding-bottom: 8px;">
         <div>
@@ -3209,16 +3617,22 @@ async function renderBuyOrderList(orders, interval) {
         <div class="d-flex justify-content-between align-items-center">
           <div>
             <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">카드 등급</div>
-            <div style="font-size: 16px; font-weight: 700;"><span style="color:#e6eefc;">${rating}</span></div>
+            <div style="font-size: 16px; font-weight: 700;"><span style="color:#e6eefc;">${rating}</span> <span style="color:#ffd700;font-size:12px;">${ratingScore}강</span></div>
           </div>
           <div class="text-end">
             <div class="text-muted" style="font-size: 10px; margin-bottom: 4px;">점수</div>
-            <div style="font-size: 14px; font-weight: 600; color: #00d1ff;">${ratingScore}</div>
+            <div style="font-size: 13px; font-weight: 600; color: #9aa8c2;">${ratingDetail}${mlRating ? ' | ' + mlRating : ''}</div>
           </div>
         </div>
       </div>
 
       <!-- 현재 가격 -->
+      <div style="background: rgba(0,209,255,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(0,209,255,0.3);">
+        <div class="zone-display-label" style="margin-bottom: 4px;">현재 가격</div>
+        <div style="font-size: 18px; font-weight: 700; color: #00d1ff; word-break: break-all;" data-current-price>${latestPrice.toLocaleString()} KRW</div>
+      </div>
+
+      <!-- 매수 가격 -->
       <div style="background: rgba(0,209,255,0.1); border-radius: 8px; padding: 10px; border: 1px solid rgba(0,209,255,0.3);">
         <div class="zone-display-label" style="margin-bottom: 4px;">매수 가격</div>
         <div style="font-size: 18px; font-weight: 700; color: #00d1ff; word-break: break-all;">${price.toLocaleString()} KRW</div>
@@ -3259,49 +3673,136 @@ async function renderBuyOrderList(orders, interval) {
         </div>
       </div>
 
-      <!-- N/B WAVE -->
-      <div style="background: rgba(14,20,36,0.8); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
-        <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 N/B WAVE</div>
-        <div style="display: flex; gap: 1px; height: 24px; border-radius: 4px; overflow: hidden;">
-          ${waveBars.map(isOrange => `<div style="flex:1; height:100%; background: linear-gradient(180deg, ${isOrange ? 'rgba(255,183,3,0.8)' : 'rgba(0,209,255,0.8)'} 0%, ${isOrange ? 'rgba(255,183,3,0.3)' : 'rgba(0,209,255,0.3)'} 100%);"></div>`).join('')}
+      <!-- N/B WAVE (LIVE) -->
+      <div style="background: rgba(14,20,36,0.8); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);" data-wave-live>
+        <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 N/B WAVE (LIVE)</div>
+        <div class="nb-wave-bars" style="display: flex; gap: 1px; height: 24px; border-radius: 4px; overflow: hidden;">
+          ${waveBarsLive.map(v => {
+            const h = Math.max(6, Math.round(v * 100));
+            const isOrange = v >= 0.5;
+            return `<div style=\"flex:1; height:${h}%; align-self:flex-end; background: linear-gradient(180deg, ${isOrange ? 'rgba(255,183,3,0.85)' : 'rgba(0,209,255,0.85)'} 0%, ${isOrange ? 'rgba(255,183,3,0.3)' : 'rgba(0,209,255,0.3)'} 100%);\"></div>`;
+          }).join('')}
         </div>
       </div>
 
-      <!-- N/B Zone & ML Trust -->
-      <div class="row g-2">
-        <div class="col-6">
-          <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🗺️ N/B Zone</div>
-          <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">
-            <div style="text-align: center;">
-              <div style="font-size: 13px; font-weight: 700; color: ${zone === 'BLUE' ? '#00d1ff' : '#ffb703'}; margin-bottom: 4px;">${zone}</div>
-              <div style="font-size: 10px; color: #d9e2f3;">${nbZone}</div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6">
-          <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🤖 ML Trust</div>
-          <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">
-            <div style="text-align: center; font-size: 10px; color: #e6eefc;">
-              <div style="font-weight: 600; margin-bottom: 2px;">${mlTrust}</div>
-              <div style="font-size: 9px; color: #9aa8c2;">Zone: ${zone}</div>
-            </div>
-          </div>
+      <!-- N/B WAVE (SNAPSHOT) -->
+      <div style="background: rgba(14,20,36,0.8); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);" data-wave-snap>
+        <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 N/B WAVE (SNAPSHOT)</div>
+        <div class="nb-wave-bars" style="display: flex; gap: 1px; height: 24px; border-radius: 4px; overflow: hidden;">
+          ${waveBarsSnap.map(v => {
+            const h = Math.max(6, Math.round(v * 100));
+            const isOrange = v >= 0.5;
+            return `<div style=\"flex:1; height:${h}%; align-self:flex-end; background: linear-gradient(180deg, ${isOrange ? 'rgba(255,183,3,0.85)' : 'rgba(0,209,255,0.85)'} 0%, ${isOrange ? 'rgba(255,183,3,0.3)' : 'rgba(0,209,255,0.3)'} 100%);\"></div>`;
+          }).join('')}
         </div>
       </div>
 
-      <!-- 손익 -->
-      <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.08); margin-top: 4px;">
-        <div style="display:flex; justify-content: space-between; align-items: center;">
-          <div style="font-size: 10px; color: #9aa8c2;">현재가 기준 손익</div>
-          <div style="font-size: 12px; font-weight: 700; color: ${pnlColor};">${pnlSign}${Math.round(pnl).toLocaleString()} KRW (${pnlSign}${pnlRate.toFixed(2)}%)</div>
+      <!-- 손익 (강조 표시) -->
+      <div style="background: linear-gradient(135deg, rgba(${pnl >= 0 ? '46,204,113' : '246,70,93'},0.15), rgba(${pnl >= 0 ? '46,204,113' : '246,70,93'},0.05)); border-radius: 8px; padding: 12px; border: 2px solid rgba(${pnl >= 0 ? '46,204,113' : '246,70,93'},0.4); margin-top: 8px;" data-pnl>
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-size: 12px; font-weight: 600; color: #ffffff;">💰 현재가 기준 손익</div>
+          <div style="font-size: 14px; font-weight: 700; color: ${pnlColor}; text-shadow: 0 0 8px ${pnlColor};">${pnlSign}${Math.round(pnl).toLocaleString()} KRW</div>
         </div>
-        <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-          <div style="font-size: 10px; color: #9aa8c2;">손실 (현재가 기준)</div>
-          <div style="font-size: 12px; font-weight: 700; color: ${lossColor};">${lossAmount < 0 ? Math.round(lossAmount).toLocaleString() : '0'} KRW (${lossAmount < 0 ? lossRate.toFixed(2) : '0.00'}%)</div>
+        <div style="display:flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div class="text-muted">수익률</div>
+          <div style="font-weight: 700; color: ${pnlColor};">${pnlSign}${pnlRate.toFixed(2)}%</div>
         </div>
       </div>
+
+      <!-- 매도 버튼 -->
+      <button onclick="executeSellForCard('${idx}', ${price}, ${size}, '${o.market || 'KRW-BTC'}')" 
+        style="width: 100%; background: linear-gradient(135deg, #f6465d 0%, #e63946 100%); border: none; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; font-weight: 700; color: #ffffff; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(246,70,93,0.3);"
+        onmouseover="this.style.boxShadow='0 6px 16px rgba(246,70,93,0.5)'; this.style.transform='translateY(-2px)';"
+        onmouseout="this.style.boxShadow='0 4px 12px rgba(246,70,93,0.3)'; this.style.transform='translateY(0)';">
+        🛍️ 매도 (${pnl >= 0 ? '수익' : '손실'})
+      </button>
     </div>`;
   }).join('');
+
+  // 실시간 현재가 업데이트 시작
+  if (orders.length > 0) {
+    window.buyCardRefreshInterval && clearInterval(window.buyCardRefreshInterval);
+    window.buyCardRefreshInterval = setInterval(() => {
+      try {
+        const updatedPrice = (() => {
+          let p = 0;
+          try {
+            const lastCandle = (window.candleDataCache || []).slice(-1)[0];
+            p = Number(lastCandle?.close || lastCandle?.value || 0) || 0;
+          } catch (_) { p = 0; }
+          if (!p && orders.length > 0) {
+            p = Number(orders[0]?.price || 0) || 0;
+          }
+          return p;
+        })();
+        
+        // 매수 카드의 현재가를 업데이트
+        document.querySelectorAll('[data-current-price]').forEach((el) => {
+          el.textContent = updatedPrice.toLocaleString() + ' KRW';
+        });
+
+        // 각 카드의 손익을 업데이트
+        orders.forEach((o, idx) => {
+          const cardEl = document.querySelector(`[data-buy-card="${idx}"]`);
+          if (cardEl) {
+            const buyPrice = Number(o.price || 0);
+            const size = Number(o.size || 0);
+            
+            // 수수료 계산 (0.1%)
+            const buyCost = buyPrice * size;
+            const buyFee = buyCost * 0.001;
+            const totalCost = buyCost + buyFee;
+            
+            const currentValue = updatedPrice * size;
+            const sellFee = currentValue * 0.001;
+            const totalValue = currentValue - sellFee;
+            
+            const pnl = totalValue - totalCost;
+            const pnlRate = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+            const pnlColor = pnl >= 0 ? '#0ecb81' : '#f6465d';
+            
+            const pnlEl = cardEl.querySelector('[data-pnl]');
+            if (pnlEl) {
+              pnlEl.innerHTML = `
+                <div style="font-size: 14px; font-weight: 700; color: ${pnlColor};">
+                  ${pnl >= 0 ? '+' : ''}${Math.round(pnl).toLocaleString()} KRW
+                </div>
+                <div style="font-size: 11px; color: ${pnlColor}; margin-top: 2px;">
+                  ${pnlRate.toFixed(2)}%
+                </div>
+              `;
+            }
+          }
+        });
+        // 각 카드의 N/B WAVE를 현재 데이터로 업데이트
+        const waveBarsLive = (() => {
+          try {
+            const candles = (window.candleDataCache || []).slice(-80);
+            const vals = candles.map(c => Number(c?.close ?? c?.value ?? 0)).filter(v => isFinite(v) && v > 0);
+            if (vals.length >= 5) {
+              const minV = Math.min(...vals);
+              const maxV = Math.max(...vals);
+              const denom = (maxV - minV) || 1;
+              return vals.map(v => (v - minV) / denom);
+            }
+          } catch(_) {}
+          return [];
+        })();
+        if (waveBarsLive.length) {
+          document.querySelectorAll('[data-wave-live] .nb-wave-bars').forEach(container => {
+            const html = waveBarsLive.map(v => {
+              const h = Math.max(6, Math.round(v * 100));
+              const isOrange = v >= 0.5;
+              return `<div style="flex:1; height:${h}%; align-self:flex-end; background: linear-gradient(180deg, ${isOrange ? 'rgba(255,183,3,0.85)' : 'rgba(0,209,255,0.85)'} 0%, ${isOrange ? 'rgba(255,183,3,0.3)' : 'rgba(0,209,255,0.3)'} 100%);"></div>`;
+            }).join('');
+            container.innerHTML = html;
+          });
+        }
+      } catch (e) {
+        console.debug('Buy card update error:', e?.message);
+      }
+    }, 1000); // 1초마다 업데이트
+  }
 }
 
 function renderSellOrderList(orders, interval) {
@@ -3453,6 +3954,47 @@ function resetFlow() {
 
 function viewTradeHistory() {
   FlowDashboard.viewTradeHistory();
+}
+
+// ============================================================================
+// 매수 카드에서 직접 매도 실행
+// ============================================================================
+async function executeSellForCard(cardIdx, price, size, market) {
+  try {
+    const confirmSell = confirm(`매도 확인\n\n가격: ${price.toLocaleString()} KRW\n수량: ${size.toFixed(8)}\n거래대금: ${(price * size).toLocaleString()} KRW\n\n매도 하시겠습니까?`);
+    if (!confirmSell) return;
+
+    const sellPayload = {
+      market: market || 'KRW-BTC',
+      price: price,
+      size: size,
+      paper: false,
+      interval: FlowDashboard.state?.timeframe || 'minute10'
+    };
+
+    const res = await fetch('http://127.0.0.1:5057/api/sell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sellPayload)
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success || result.ok) {
+        alert('✅ 매도 주문이 접수되었습니다');
+        // 매도 내역 새로고침
+        if (FlowDashboard.loadBuyOrders) {
+          await FlowDashboard.loadBuyOrders();
+        }
+      } else {
+        alert(`⚠️ 매도 실패: ${result.message || result.error || '알 수 없는 오류'}`);
+      }
+    } else {
+      alert(`❌ 매도 요청 실패 (HTTP ${res.status})`);
+    }
+  } catch (e) {
+    alert(`❌ 매도 중 오류: ${e?.message}`);
+  }
 }
 
 // ============================================================================

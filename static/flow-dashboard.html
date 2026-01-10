@@ -186,6 +186,42 @@
           <div class="graph-container" id="step2Graph">
             <!-- LightweightCharts will be rendered here -->
           </div>
+          <!-- Auto Buy Strategy -->
+          <div class="card border-info rounded-3 p-3 mt-3" style="background: linear-gradient(135deg, rgba(0,209,255,0.08), rgba(14,20,36,0.6));">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <h6 class="m-0" style="color:#00d1ff; font-weight:700;">⚙️ Auto Buy (BLUE 지역)</h6>
+                <small class="text-muted">주기적으로 BLUE 지역에서 자동 매수</small>
+              </div>
+              <span id="autoBuyStatus" class="badge bg-secondary">OFF</span>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">주기</label>
+                <select id="autoBuyInterval" class="form-select form-select-sm">
+                  <option value="10m">10분</option>
+                  <option value="30m">30분</option>
+                  <option value="1h">1시간</option>
+                  <option value="2h">2시간</option>
+                  <option value="4h">4시간</option>
+                  <option value="6h">6시간</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">매수 금액 (KRW)</label>
+                <input id="autoBuyAmount" type="number" value="5000" min="1000" step="1000" class="form-control form-control-sm" />
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center justify-content-between mt-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="autoBuyBlueOnly" checked />
+                <label class="form-check-label" for="autoBuyBlueOnly" style="font-size:11px; color:#d9e2f3;">BLUE 지역에서만 매수</label>
+              </div>
+              <button id="autoBuyToggle" class="btn btn-sm btn-outline-info">▶️ 시작</button>
+            </div>
+          </div>
         </div>
         
         <!-- Right: Current Card (현재 카드) -->
@@ -266,12 +302,13 @@
             </div>
 
             <!-- 요약 그래프 -->
-            <div style="position: relative; height: 92px;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="position: relative; height: 110px; padding: 8px 0;">
+              <div style="display:flex; justify-content:flex-start; align-items:center; margin-bottom: 8px; position: relative; z-index: 10;">
                 <div style="font-size: 11px; font-weight: 600; color: #ffffff;">📊 추이 그래프</div>
-                <div id="ccSummaryLastPrice" style="font-size: 11px; font-weight: 700; color: #00d1ff; background: rgba(0,209,255,0.12); border: 1px solid rgba(0,209,255,0.35); padding: 2px 8px; border-radius: 999px;">-</div>
               </div>
-              <canvas id="ccSummaryChart" style="position: absolute; top: 28px; left: 0; width: 100%; height: 64px !important;"></canvas>
+              <div style="position: absolute; top: 40px; left: 0; width: 100%; height: 70px;">
+                <canvas id="ccSummaryChart" style="width: 100% !important; height: 100% !important;"></canvas>
+              </div>
             </div>
 
             <!-- N/B WAVE STATUS -->

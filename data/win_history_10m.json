@@ -1,18 +1,18 @@
 {
   "latest": {
-    "timestamp": "2026-01-08T17:48:10.170383",
-    "time": "2026-01-08 17:48:10",
-    "zone": "ORANGE",
-    "nb_zone": "ORANGE",
-    "ml_zone": "ORANGE",
-    "nb_trust": 82.0,
-    "ml_trust": 47.0,
+    "timestamp": "2026-01-10T06:04:55.132512",
+    "time": "2026-01-10 06:04:55",
+    "zone": "BLUE",
+    "nb_zone": "BLUE",
+    "ml_zone": "BLUE",
+    "nb_trust": 50.0,
+    "ml_trust": 50.0,
     "decision_reason": "consensus",
     "timeframe": "10m",
-    "price": 131976000.0,
-    "price_formatted": "131,976,000",
+    "price": 133085000.0,
+    "price_formatted": "133,085,000",
     "win_history_count": 25
   },
-  "last_updated": "2026-01-08T17:48:10.170383",
+  "last_updated": "2026-01-10T06:04:55.132512",
   "timeframe": "10m"
 }

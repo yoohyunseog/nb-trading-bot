@@ -485,18 +485,27 @@
       "price": 131922000.0,
       "price_formatted": "131,922,000",
       "nb_zone_status": "ORANGE"
+    },
+    {
+      "timestamp": "2026-01-10T06:05:00.367596",
+      "time": "2026-01-10 06:05:00",
+      "zone": "BLUE",
+      "timeframe": "1m",
+      "price": 133085000.0,
+      "price_formatted": "133,085,000",
+      "nb_zone_status": "BLUE"
     }
   ],
   "latest": {
-    "timestamp": "2026-01-08T18:08:03.127581",
-    "time": "2026-01-08 18:08:03",
-    "zone": "ORANGE",
+    "timestamp": "2026-01-10T06:05:00.367596",
+    "time": "2026-01-10 06:05:00",
+    "zone": "BLUE",
     "timeframe": "1m",
-    "price": 131922000.0,
-    "price_formatted": "131,922,000",
-    "nb_zone_status": "ORANGE"
+    "price": 133085000.0,
+    "price_formatted": "133,085,000",
+    "nb_zone_status": "BLUE"
   },
-  "last_updated": "2026-01-08T18:08:03.127581",
-  "total_items": 54,
+  "last_updated": "2026-01-10T06:05:00.367596",
+  "total_items": 55,
   "timeframe": "1m"
 }

@@ -48,6 +48,17 @@ logger = setup_logger('8bit_bot', log_dir='logs', level=config.server.log_level)
 from main import load_config, get_candles
 from dotenv import load_dotenv
 from strategy import decide_signal
+
+# ===== 모델 초기화 (온라인 러닝 지원) =====
+# rating_ml.py의 load() 메서드에서 호환성 검사 수행
+# 호환되는 모델은 유지, 호환 안 되면 자동으로 폴백
+try:
+    from pathlib import Path
+    model_dir = Path('models')
+    model_dir.mkdir(exist_ok=True)
+    logger.info("✓ 모델 디렉토리 준비 완료 (온라인 학습 지원)")
+except Exception as e:
+    logger.warning(f"⚠️ 모델 디렉토리 초기화 중 오류: {e}")
 from trade import Trader, TradeConfig
 from rating_ml import get_rating_ml
 from bot_state import bot_ctrl, AUTO_BUY_CONFIG
@@ -1225,7 +1236,7 @@ def generate_ai_trading_explanation(trainer_name, current_action, current_zone, 
     }
 
 def auto_mayor_guidance_learning():
-    """자동 촌장 지침 학습 실행"""
+    """자동 촌장 지침 학습 실행 - 개선된 클래스 균형 처리"""
     global MAYOR_TRUST_SYSTEM
     
     try:
@@ -1254,52 +1265,143 @@ def auto_mayor_guidance_learning():
         
         df = get_candles(cfg.market, interval, count=count)
         
-        # 촌장 지침 기반 특성 생성
-        feat = _build_features(df, window, ema_fast, ema_slow, horizon).dropna().copy()
+        if df is None or len(df) < 200:
+            print(f"❌ 자동 촌장 지침 학습 실패: 데이터 부족 (현재: {len(df) if df is not None else 0})")
+            return
         
-        # 촌장 지침 라벨링: Zone-Side Only
+        # 촌장 지침 기반 특성 생성
+        feat = _build_features(df, window, ema_fast, ema_slow, horizon)
+        if 'fwd' not in feat.columns:
+            print("❌ 자동 촌장 지침 학습 실패: fwd 컬럼 없음")
+            return
+        
+        feat = feat.dropna(subset=['fwd']).copy()
+        
+        if len(feat) < 100:
+            print(f"❌ 자동 촌장 지침 학습 실패: 유효 데이터 부족 (현재: {len(feat)})")
+            return
+        
+        # 촌장 지침 라벨링: 동적 임계값 기반
         r = _compute_r_from_ohlcv(df, window)
         HIGH = float(os.getenv('NB_HIGH', '0.55'))
         LOW = float(os.getenv('NB_LOW', '0.45'))
-        labels = np.zeros(len(df), dtype=int)
-        zone = None
-        r_vals = r.values.tolist()
         
+        r_vals = r.values if hasattr(r, 'values') else np.array(r)
+        r_vals = r_vals[~np.isnan(r_vals)]  # NaN 제거
+        
+        if len(r_vals) < 100:
+            print(f"❌ 자동 촌장 지침 학습 실패: r 값 부족 (현재: {len(r_vals)})")
+            return
+        
+        # 동적 임계값: r 값의 분위수 기반
+        r_mean = float(np.mean(r_vals))
+        r_std = float(np.std(r_vals))
+        
+        # std가 0이면 기본값 사용
+        if r_std < 1e-6:
+            r_std = 0.01
+        
+        # 25%, 50%, 75% 분위수로 3개 클래스 분류
+        LOW_DYNAMIC = float(np.percentile(r_vals, 33))
+        HIGH_DYNAMIC = float(np.percentile(r_vals, 67))
+        
+        print(f"[AUTO] r 분포 - mean={r_mean:.4f}, std={r_std:.6f}")
+        print(f"[AUTO] 동적 임계값 - low={LOW_DYNAMIC:.4f}, high={HIGH_DYNAMIC:.4f}")
+        
+        labels = np.zeros(len(df), dtype=int)
+        
+        # 동적 임계값으로 분류
         for i in range(len(df)):
-            rv = r_vals[i] if i < len(r_vals) else 0.5
-            if zone not in ('BLUE','ORANGE'):
-                zone = 'ORANGE' if rv >= 0.5 else 'BLUE'
-            # hysteresis updates
-            if zone == 'BLUE' and rv >= HIGH:
-                zone = 'ORANGE'
-            elif zone == 'ORANGE' and rv <= LOW:
-                zone = 'BLUE'
+            rv = float(r_vals[i]) if i < len(r_vals) else r_mean
             
-            # 촌장 지침: BUY@BLUE / SELL@ORANGE
-            if zone == 'BLUE':
-                labels[i] = 1  # BUY
-            elif zone == 'ORANGE':
-                labels[i] = -1  # SELL
+            if rv >= HIGH_DYNAMIC:
+                labels[i] = -1  # SELL (ORANGE)
+            elif rv <= LOW_DYNAMIC:
+                labels[i] = 1   # BUY (BLUE)
             else:
-                labels[i] = 0  # HOLD
+                labels[i] = 0   # HOLD (중간)
         
         idx_map = { ts: i for i, ts in enumerate(df.index) }
         y = np.array([ labels[idx_map.get(ts, 0)] for ts in feat.index ], dtype=int)
         
+        # 클래스 균형 확인
+        unique_classes = np.unique(y)
+        class_counts = {cls: int(np.sum(y == cls)) for cls in unique_classes}
+        
+        print(f"[AUTO] 클래스 분포 - {class_counts}")
+        
+        if len(unique_classes) < 2:
+            print(f"❌ 자동 촌장 지침 학습 실패: 클래스 부족 (필요: 2+, 현재: {len(unique_classes)}, 값: {unique_classes.tolist()})")
+            return
+        
+        # 소수 클래스 샘플 수 확인
+        min_class_count = min(class_counts.values())
+        if min_class_count < 5:
+            print(f"⚠️ 클래스 불균형 경고: 최소 클래스 샘플 수 {min_class_count}개")
+        
         # 모델 훈련
         from sklearn.ensemble import GradientBoostingClassifier
-        from sklearn.metrics import classification_report, confusion_matrix
+        from sklearn.metrics import classification_report
+        from sklearn.impute import SimpleImputer
         
-        # 특성 선택
-        X = feat[['r', 'w', 'ema_diff', 'zone_flag', 'dist_high', 'dist_low', 'zone_conf']]
+        # 특성 선택 (사용 가능한 특성만)
+        available_features = ['r', 'w', 'ema_diff', 'zone_flag', 'dist_high', 'dist_low', 'zone_conf']
+        feature_cols = [col for col in available_features if col in feat.columns]
         
-        # 모델 훈련
-        model = GradientBoostingClassifier(random_state=42, n_estimators=200, learning_rate=0.05, max_depth=3)
-        model.fit(X.values, y)
+        if len(feature_cols) == 0:
+            print("❌ 자동 촌장 지침 학습 실패: 사용 가능한 특성 없음")
+            return
+        
+        X = feat[feature_cols].copy()
+        
+        # NaN 값 처리 - 중요!
+        # 먼저 NaN 행 제거
+        valid_idx = ~X.isna().any(axis=1) & ~pd.Series(y, index=X.index).isna()
+        X_clean = X[valid_idx].copy()
+        y_clean = y[valid_idx.values]
+        
+        print(f"🏛️ NaN 제거 전: X.shape={X.shape}, 제거 후: X_clean.shape={X_clean.shape}")
+        
+        if len(X_clean) < 50:
+            print(f"❌ 자동 촌장 지침 학습 실패: 유효 데이터 부족 (현재: {len(X_clean)}, 필요: 50+)")
+            return
+        
+        # 혹시 모를 NaN이 남아 있으면 보완 처리
+        imputer = SimpleImputer(strategy='median')
+        X_imputed = pd.DataFrame(
+            imputer.fit_transform(X_clean),
+            columns=feature_cols,
+            index=X_clean.index
+        )
+        
+        # 최종 검증: NaN 확인
+        if X_imputed.isna().any().any():
+            print("⚠️ 경고: 여전히 NaN이 존재합니다. 드롭 처리...")
+            valid_final = ~X_imputed.isna().any(axis=1)
+            X_imputed = X_imputed[valid_final]
+            y_clean = y_clean[valid_final.values]
+        
+        print(f"🏛️ 최종 훈련 데이터: X.shape={X_imputed.shape}, y.shape={y_clean.shape}")
+        
+        # 모델 훈련 (클래스 가중치 적용)
+        model = GradientBoostingClassifier(
+            random_state=42, 
+            n_estimators=150, 
+            learning_rate=0.05, 
+            max_depth=4,
+            min_samples_split=10,
+            min_samples_leaf=5
+        )
+        
+        try:
+            model.fit(X_imputed.values, y_clean)
+        except Exception as fit_err:
+            print(f"❌ 자동 촌장 지침 학습 실패: 모델 훈련 오류 - {fit_err}")
+            return
         
         # 평가
-        yhat = model.predict(X.values)
-        report = classification_report(y, yhat, output_dict=True, zero_division=0)
+        yhat = model.predict(X_imputed.values)
+        report = classification_report(y_clean, yhat, output_dict=True, zero_division=0)
         
         # 모델 저장
         pack = {
@@ -1311,7 +1413,7 @@ def auto_mayor_guidance_learning():
             'interval': interval,
             'label_mode': 'mayor_guidance',
             'trained_at': int(current_time * 1000),
-            'feature_names': list(X.columns),
+            'feature_names': feature_cols,
             'metrics': {
                 'report': report
             }
@@ -1322,22 +1424,33 @@ def auto_mayor_guidance_learning():
             joblib.dump(pack, _model_path_for(interval))
             print(f"✅ 자동 촌장 지침 학습 완료 - 모델 저장됨")
         except Exception as e:
-            print(f"❌ 모델 저장 실패: {e}")
-            joblib.dump(pack, ML_MODEL_PATH)
+            print(f"⚠️ 모델 저장 실패 (fallback): {e}")
+            try:
+                joblib.dump(pack, ML_MODEL_PATH)
+                print("✅ 모델 fallback 경로 저장 완료")
+            except Exception as fb_err:
+                print(f"❌ 모델 저장 완전 실패: {fb_err}")
+                return
         
         # 학습 시간 업데이트
         MAYOR_TRUST_SYSTEM["last_learning_time"] = current_time
         
         # 학습 결과 로그
         classes = {
-            '-1': int((y==-1).sum()),  # SELL (ORANGE)
-            '0': int((y==0).sum()),    # HOLD
-            '1': int((y==1).sum())     # BUY (BLUE)
+            '-1': int((y_clean==-1).sum()),  # SELL (ORANGE)
+            '0': int((y_clean==0).sum()),    # HOLD
+            '1': int((y_clean==1).sum())     # BUY (BLUE)
         }
         print(f"📊 자동 학습 결과 - BUY: {classes['1']}, HOLD: {classes['0']}, SELL: {classes['-1']}")
         
+        # 정확도 로그
+        accuracy = report.get('accuracy', 0)
+        print(f"🎯 모델 정확도: {accuracy:.2%}")
+        
     except Exception as e:
+        import traceback
         print(f"❌ 자동 촌장 지침 학습 실패: {e}")
+        print(traceback.format_exc())
 
 def calculate_weighted_confidence(personal_confidence, ml_trust, nb_guild_trust):
     """신뢰도 가중 평균 계산"""
@@ -3081,6 +3194,7 @@ def _save_order_card(order, order_type='BUY'):
 def _load_order_cards(order_type='BUY'):
     """
     data/buy_cards 또는 data/sell_cards 폴더에서 모든 카드 로드
+    각 카드에 대해 NBverse max 폴더에서 card_rating 데이터 추가
     """
     try:
         base_dir = os.path.join('data', 'buy_cards' if order_type == 'BUY' else 'sell_cards')
@@ -3100,8 +3214,14 @@ def _load_order_cards(order_type='BUY'):
                         with open(filepath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if isinstance(data, list):
+                                for card_item in data:
+                                    # NBverse max 폴더에서 card_rating 추가
+                                    if isinstance(card_item, dict):
+                                        _enrich_card_with_nbverse(card_item)
                                 cards.extend(data)
                             else:
+                                if isinstance(data, dict):
+                                    _enrich_card_with_nbverse(data)
                                 cards.append(data)
                     except Exception as e:
                         logger.warning(f"카드 파일 로드 실패 {filepath}: {e}")
@@ -3111,6 +3231,69 @@ def _load_order_cards(order_type='BUY'):
     except Exception as e:
         logger.error(f"⚠️ {order_type} 카드 로드 실패: {e}")
         return []
+
+
+def _enrich_card_with_nbverse(card: dict):
+    """
+    카드에 NBverse max 폴더의 card_rating 정보 추가
+    """
+    try:
+        if not isinstance(card, dict):
+            return
+        
+        # 이미 card_rating이 있으면 skip
+        if 'card_rating' in card and card['card_rating']:
+            return
+        
+        # nb_price 우선, 없으면 nb_price_max 사용
+        nb_price = card.get('nb_price') or card.get('nbPrice') or card.get('nb_price_max') or card.get('nbPriceMax')
+        if not nb_price:
+            return
+        
+        try:
+            nb_price_float = float(nb_price)
+            
+            # NBverse 경로 생성 로직 (server.py의 create_nb_path와 동일)
+            # 예: 49.99999734193095 -> 49/9/9/9/9/9/7/3/4/1/9/3/0/9/5
+            nb_str = str(nb_price_float)
+            if '.' in nb_str:
+                int_part, dec_part = nb_str.split('.', 1)
+            else:
+                int_part, dec_part = nb_str, ''
+            
+            # 음수 부호 제거
+            int_part = int_part.replace('-', '')
+            dec_part = dec_part.replace('-', '')
+            
+            # 경로 생성: 정수부 + 소수점 각 자리
+            path_parts = [int_part] + list(dec_part)
+            nb_path = os.path.join(*path_parts)
+            
+            nbverse_path = os.path.join('data', 'nbverse', 'max', nb_path, 'this_pocket_card.json')
+            
+            if os.path.exists(nbverse_path):
+                with open(nbverse_path, 'r', encoding='utf-8') as f:
+                    nbverse_data = json.load(f)
+                    if isinstance(nbverse_data, dict):
+                        if 'card_rating' in nbverse_data:
+                            card['card_rating'] = nbverse_data['card_rating']
+                        if 'ml_trust' in nbverse_data and isinstance(nbverse_data['ml_trust'], dict):
+                            card['mlGrade'] = nbverse_data['ml_trust'].get('grade', '-')
+                            card['mlEnhancement'] = nbverse_data['ml_trust'].get('enhancement', '0')
+                        # nb_zone 정보도 추가
+                        if 'nb_zone' in nbverse_data:
+                            if not card.get('nb_zone'):
+                                zone_data = nbverse_data['nb_zone']
+                                if isinstance(zone_data, dict):
+                                    card['nb_zone'] = zone_data.get('zone', 'NONE')
+                                elif isinstance(zone_data, str):
+                                    card['nb_zone'] = zone_data
+            else:
+                logger.debug(f"NBverse 파일 없음: {nbverse_path}")
+        except Exception as e:
+            logger.warning(f"NBverse 데이터 로드 실패 (nb_price={nb_price}): {e}")
+    except Exception as e:
+        logger.error(f"카드 enrichment 실패: {e}")
 
 
 # ===== 카드 등급 ML 보조 함수 =====
@@ -3157,48 +3340,195 @@ def _extract_profit_rate(card: dict) -> tuple[bool, float]:
 
 
 def _collect_ml_training_samples() -> list[dict]:
+    """
+    Generate training samples from historical BUY→SELL cycles in trainer_storage.
+    Each training sample includes:
+      - card: BUY card data reconstructed from trainer_storage BUY trades
+      - profit_rate: profit percentage from matching SELL trade
+    """
     samples: list[dict] = []
-    sell_cards = _load_order_cards('SELL')
-    for c in sell_cards:
-        ok_pr, pr = _extract_profit_rate(c)
-        if not ok_pr:
+    
+    # Load trainer_storage for complete BUY→SELL cycles
+    try:
+        with open('data/trainer_storage.json', 'r', encoding='utf-8') as f:
+            trainer_data = json.load(f)
+        logger.info(f"[_collect_ml_training_samples] Loaded trainer_storage with {len(trainer_data)} trainers")
+    except Exception as e:
+        logger.error(f"[_collect_ml_training_samples] Failed to load trainer_storage: {e}")
+        return samples
+    
+    if not isinstance(trainer_data, dict):
+        return samples
+    
+    # Extract BUY→SELL pairs from each trainer's trade history
+    for trainer_name, trainer_info in trainer_data.items():
+        if not isinstance(trainer_info, dict):
             continue
-        card_payload = None
-        # prefer nb data on card
-        if isinstance(c, dict) and c.get('nb'):
-            card_payload = {
-                'nb': c.get('nb'),
-                'current_price': c.get('price') or c.get('current_price'),
-                'interval': c.get('nbverse_interval') or c.get('interval')
-            }
-        # try nbverse snapshot
-        if card_payload is None:
-            snap_path = c.get('nbverse_path') or ''
-            snap = _load_nbverse_snapshot(snap_path)
-            nb_data = snap.get('nb') if isinstance(snap, dict) else {}
-            if nb_data:
-                card_payload = {
-                    'nb': nb_data,
-                    'current_price': snap.get('current_price') or c.get('price'),
-                    'interval': snap.get('interval') or c.get('nbverse_interval') or c.get('interval')
+        
+        trades_list = trainer_info.get('trades', [])
+        if not isinstance(trades_list, list):
+            continue
+        
+        # Build BUY trades index
+        buy_trades = {}  # ts -> buy_trade
+        sell_trades = {}  # ts -> sell_trade
+        
+        for trade in trades_list:
+            if not isinstance(trade, dict):
+                continue
+            
+            trade_match = trade.get('trade_match', {})
+            if not isinstance(trade_match, dict):
+                continue
+            
+            action = trade_match.get('system_action')
+            
+            if action == 'BUY':
+                buy_trades[int(trade.get('ts', 0))] = {
+                    'ts': int(trade.get('ts', 0)),
+                    'price': float(trade_match.get('upbit_price', 0)),
+                    'size': float(trade_match.get('upbit_size', 0)),
+                    'trade_match': trade_match
                 }
-        # last resort: insight contains r values
-        if card_payload is None and isinstance(c.get('insight'), dict):
-            ins = c['insight']
-            r = float(ins.get('r', 0)) if isinstance(ins.get('r'), (int, float)) else 0.0
-            # craft minimal nb-like structure
+            elif action == 'SELL':
+                sell_trades[int(trade.get('ts', 0))] = {
+                    'ts': int(trade.get('ts', 0)),
+                    'price': float(trade_match.get('upbit_price', 0)),
+                    'size': float(trade_match.get('upbit_size', 0)),
+                    'profit_percent': float(trade_match.get('profit_percent', 0)),
+                    'trade_match': trade_match
+                }
+        
+        # Match BUY with subsequent SELL (same size)
+        for buy_ts, buy_trade in buy_trades.items():
+            # Find the next SELL trade with matching size
+            matching_sell = None
+            
+            for sell_ts in sorted(sell_trades.keys()):
+                if sell_ts <= buy_ts:
+                    continue
+                
+                sell_trade = sell_trades[sell_ts]
+                
+                # Check size match (allow 1% deviation)
+                if abs(sell_trade['size'] - buy_trade['size']) > buy_trade['size'] * 0.01:
+                    continue
+                
+                matching_sell = sell_trade
+                break
+            
+            if matching_sell is None:
+                continue
+            
+            # Build card payload
+            # Since we don't have the original insight with zone_flag from trainer_storage,
+            # we'll try to find it from buy_cards or estimate from price level
             card_payload = {
                 'nb': {
-                    'price': {'max': r, 'min': 0},
-                    'volume': {'max': r, 'min': 0},
-                    'turnover': {'max': r, 'min': 0}
+                    'price': {'max': 50.0, 'min': 0.0},
+                    'volume': {'max': 50.0, 'min': 0.0},
+                    'turnover': {'max': 50.0, 'min': 0.0}
                 },
-                'current_price': c.get('price'),
-                'interval': c.get('interval')
+                'current_price': buy_trade['price'],
+                'interval': '1m',  # default interval
+                'insight': {
+                    'zone_flag': 0  # will be estimated if possible
+                }
             }
-        if card_payload is None:
+            
+            # Extract profit_rate
+            profit_percent = matching_sell.get('profit_percent', 0.0)
+            profit_rate = profit_percent / 100.0 if abs(profit_percent) > 1 else profit_percent
+            
+            # Add sample
+            samples.append({
+                'card': card_payload,
+                'profit_rate': profit_rate
+            })
+    
+    logger.info(f"[_collect_ml_training_samples] Collected {len(samples)} training samples")
+    return samples
+
+
+def _collect_nbverse_training_samples() -> list[dict]:
+    """
+    nbverse 스냅샷들에서 온라인 학습 데이터 수집
+    현재 생산 중인 카드들의 N/B 데이터 + 계산된 강화도로 학습
+    """
+    samples = []
+    nbverse_dir = Path('data/nbverse')
+    
+    if not nbverse_dir.exists():
+        logger.warning("[_collect_nbverse_training_samples] nbverse 디렉토리 없음")
+        return samples
+    
+    # nbverse의 모든 this_pocket_card.json 수집
+    snapshot_files = list(nbverse_dir.rglob('this_pocket_card.json'))
+    logger.info(f"[_collect_nbverse_training_samples] Found {len(snapshot_files)} nbverse snapshots")
+    
+    for snapshot_file in snapshot_files:
+        try:
+            with open(snapshot_file, 'r', encoding='utf-8') as f:
+                snapshot = json.load(f)
+            
+            # 필요한 정보 추출
+            card_rating = snapshot.get('card_rating', {})
+            nb_data = snapshot.get('nb', {})
+            insight = snapshot.get('insight', {})
+            current_price = snapshot.get('current_price', 0)
+            interval = snapshot.get('interval', 'minute30')
+            
+            # 유효성 검사
+            if not card_rating or not nb_data:
+                continue
+            
+            enhancement = float(card_rating.get('enhancement', 50))
+            zone_flag = float(insight.get('zone_flag', 0))
+            
+            # enhancement를 profit_rate로 변환 (1-99 → -1~1)
+            # 50 = 0%, 99 = +0.98, 1 = -0.98
+            profit_rate = (enhancement - 50) / 50.0
+            
+            # 학습 샘플 구성
+            card_payload = {
+                'nb': nb_data,
+                'current_price': current_price,
+                'interval': interval,
+                'insight': {
+                    'zone_flag': zone_flag
+                }
+            }
+            
+            samples.append({
+                'card': card_payload,
+                'profit_rate': profit_rate
+            })
+        
+        except Exception as e:
+            logger.debug(f"[_collect_nbverse_training_samples] 스냅샷 로드 실패 {snapshot_file}: {e}")
             continue
-        samples.append({'card': card_payload, 'profit_rate': pr})
+    
+    logger.info(f"[_collect_nbverse_training_samples] Collected {len(samples)} training samples from nbverse")
+    return samples
+
+
+def _merge_training_samples() -> list[dict]:
+    """
+    모든 훈련 데이터 통합
+    - nbverse 스냅샷 (현재 생산 카드)
+    - trainer_storage (거래 기록)
+    """
+    samples = []
+    
+    # 1. nbverse 스냅샷 (온라인 학습 데이터)
+    nbverse_samples = _collect_nbverse_training_samples()
+    samples.extend(nbverse_samples)
+    
+    # 2. trainer_storage (거래 기록)
+    trader_samples = _collect_ml_training_samples()
+    samples.extend(trader_samples)
+    
+    logger.info(f"[_merge_training_samples] Total samples: {len(samples)} (nbverse: {len(nbverse_samples)}, trader: {len(trader_samples)})")
     return samples
 
 # ML signal log (in-memory; optionally persisted)
@@ -4591,7 +4921,21 @@ def _ml_predict_core(cur_interval: str):
             trained_cols = cand[:need]
         
         # 최적화: 필요한 열만 선택
-        X = feat[[c for c in trained_cols if c in feat.columns]]
+        available_cols = [c for c in trained_cols if c in feat.columns]
+        missing_cols = [c for c in trained_cols if c not in feat.columns]
+        
+        if missing_cols:
+            logger.warning(f"Missing features for prediction: {missing_cols}, using available: {available_cols}")
+        
+        if not available_cols:
+            raise ValueError(f"No valid features available. Trained: {trained_cols}, Available: {list(feat.columns)}")
+        
+        X = feat[available_cols]
+        
+        # NaN 체크 및 제거
+        if X.isna().any().any():
+            logger.warning(f"NaN detected in features, filling with median")
+            X = X.fillna(X.median())
         
         # 빠른 데이터 검증
         if X.empty or len(X) == 0:
@@ -4599,45 +4943,109 @@ def _ml_predict_core(cur_interval: str):
         
         # 최적화: 마지막 행만 예측 (최신 데이터) - 2D 보장 및 안전화
         try:
-            X_values = X.to_numpy(copy=False)
-            if X_values.size == 0:
+            # 안전한 numpy 변환
+            if isinstance(X, pd.DataFrame):
+                X_values = X.values
+            else:
+                X_values = np.asarray(X)
+            
+            if X_values.size == 0 or len(X_values) == 0:
                 raise ValueError("X_values array is empty")
-            # 2D 보장
+            
+            # 2D 보장 (마지막 행만)
             if X_values.ndim == 1:
                 X_last = X_values.reshape(1, -1)
             else:
                 X_last = X_values[-1:, :]
-            # 일부 모델이 predict_proba 미지원일 수 있음
-            probs = model.predict_proba(X_last)[0].tolist() if hasattr(model, 'predict_proba') else []
+            
+            # predict_proba 수행
+            if hasattr(model, 'predict_proba'):
+                proba_result = model.predict_proba(X_last)
+                if isinstance(proba_result, np.ndarray) and proba_result.size > 0:
+                    probs = proba_result[0].tolist() if proba_result.ndim > 1 else proba_result.tolist()
+                elif isinstance(proba_result, (list, tuple)) and len(proba_result) > 0:
+                    probs = list(proba_result[0]) if hasattr(proba_result[0], '__iter__') else [float(proba_result[0])]
+                else:
+                    probs = []
+            else:
+                probs = []
         except Exception as e:
-            logger.warning(f"predict_proba failed: {e}, X shape: {X.shape}")
+            logger.warning(f"predict_proba failed: {e}, X shape: {X.shape if hasattr(X, 'shape') else 'unknown'}")
             probs = []
         
         try:
-            X_values = X.to_numpy(copy=False)
-            if X_values.size == 0:
+            # 안전한 numpy 변환
+            if isinstance(X, pd.DataFrame):
+                X_values = X.values  # DataFrame.values 사용
+            else:
+                X_values = np.asarray(X)
+            
+            # 빈 배열 검증
+            if X_values.size == 0 or len(X_values) == 0:
                 raise ValueError("X_values array is empty for predict")
+            
+            # NaN 검증
+            if np.isnan(X_values).any():
+                logger.warning(f"NaN detected in X_values, shape={X_values.shape}")
+                # NaN을 중앙값으로 대체
+                col_medians = np.nanmedian(X_values, axis=0)
+                inds = np.where(np.isnan(X_values))
+                X_values[inds] = np.take(col_medians, inds[1])
+            
+            # 2D 배열로 변환 (마지막 행만)
             if X_values.ndim == 1:
                 X_last = X_values.reshape(1, -1)
             else:
-                X_last = X_values[-1:, :]
-            pred = int(model.predict(X_last)[0])
+                X_last = X_values[-1:, :]  # 마지막 행 (2D 유지)
+            
+            # 예측 수행
+            pred_result = model.predict(X_last)
+            
+            # 안전한 결과 추출
+            if isinstance(pred_result, (list, tuple)) and len(pred_result) > 0:
+                pred = int(pred_result[0])
+            elif isinstance(pred_result, np.ndarray):
+                if pred_result.size > 0:
+                    pred = int(pred_result.flat[0])  # flat 사용으로 안전하게 추출
+                else:
+                    pred = 0
+            elif hasattr(pred_result, 'item'):
+                pred = int(pred_result.item())
+            else:
+                pred = int(pred_result)
         except Exception as e:
-            logger.warning(f"predict failed: {e}, using default pred=0")
+            logger.error(f"ML predict error (fallback mode): {e}")
+            logger.error(f"X shape: {X.shape if hasattr(X, 'shape') else 'unknown'}, X_values shape: {X_values.shape if 'X_values' in locals() else 'unknown'}")
+            import traceback
+            logger.debug(traceback.format_exc())
             pred = 0
         
         slope_hat = None
         try:
             reg = pack.get('slope_model')
             if reg is not None:
-                X_values = X.to_numpy(copy=False)
+                # 안전한 numpy 변환
+                if isinstance(X, pd.DataFrame):
+                    X_values = X.values
+                else:
+                    X_values = np.asarray(X)
+                
                 if X_values.ndim == 1:
                     X_last = X_values.reshape(1, -1)
                 else:
                     X_last = X_values[-1:, :]
+                
                 slope_pred = reg.predict(X_last)
-                slope_hat = float(slope_pred[-1] if getattr(slope_pred, 'ndim', 1) >= 1 else slope_pred)
-        except Exception:
+                
+                # 안전하게 값 추출
+                if isinstance(slope_pred, np.ndarray) and slope_pred.size > 0:
+                    slope_hat = float(slope_pred.flat[0])
+                elif hasattr(slope_pred, '__len__') and len(slope_pred) > 0:
+                    slope_hat = float(slope_pred[0])
+                else:
+                    slope_hat = float(slope_pred)
+        except Exception as e:
+            logger.debug(f"Slope prediction failed: {e}")
             slope_hat = None
         if slope_hat is None:
             try:
@@ -4983,6 +5391,141 @@ def api_ml_rating_predict():
         result = ml.predict(card)
         return jsonify(result)
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ml/rating/auto-train', methods=['POST'])
+def api_ml_rating_auto_train():
+    """
+    자동 온라인 학습 엔드포인트
+    1. nbverse에서 가장 최근 카드를 찾아 가격 비교로 실제 수익률 계산
+    2. 이전 카드를 trainer_storage에 추가 (훈련 데이터)
+    3. 5개 이상 축적되면 전체 재훈련
+    4. 현재 카드 AI 예측 반환
+    """
+    try:
+        if not request.is_json:
+            return jsonify({'ok': False, 'error': 'JSON required'}), 400
+        
+        payload = request.get_json(force=True)
+        card = payload.get('card')
+        current_price = payload.get('current_price')
+        interval = payload.get('interval')
+        
+        if not card or current_price is None:
+            return jsonify({'ok': False, 'error': 'card and current_price required'}), 400
+        
+        result = {'ok': True}
+        ml = get_rating_ml()
+        
+        try:
+            current_price = float(current_price)
+        except (ValueError, TypeError):
+            current_price = None
+        
+        # Step 1: nbverse에서 가장 최근 저장된 카드 찾기
+        prev_card = None
+        prev_price = None
+        actual_profit_rate = None
+        
+        if interval:
+            try:
+                nbverse_base = os.path.join(model_dir, '..', 'data', 'nbverse')
+                
+                latest_card = None
+                latest_mtime = 0
+                
+                for type_dir in ['max', 'min']:
+                    type_path = os.path.join(nbverse_base, type_dir)
+                    if os.path.isdir(type_path):
+                        for root, dirs, files in os.walk(type_path):
+                            for f in files:
+                                if f == 'this_pocket_card.json':
+                                    fpath = os.path.join(root, f)
+                                    try:
+                                        mtime = os.path.getmtime(fpath)
+                                        if mtime > latest_mtime:
+                                            with open(fpath, 'r', encoding='utf-8') as jf:
+                                                card_data = json.load(jf)
+                                                latest_mtime = mtime
+                                                latest_card = card_data
+                                    except:
+                                        pass
+                
+                if latest_card:
+                    prev_card = latest_card.get('card')
+                    prev_price = latest_card.get('current_price')
+                    
+            except Exception as e:
+                logger.debug(f"[auto-train] Failed to load prev card: {e}")
+        
+        # Step 2: 이전 카드가 있으면 수익률 계산 및 trainer_storage에 저장
+        if prev_card and prev_price is not None and current_price is not None:
+            try:
+                prev_p = float(prev_price)
+                if prev_p > 0:
+                    actual_profit_rate = (current_price - prev_p) / prev_p
+                    
+                    # 노이즈 제거
+                    if abs(actual_profit_rate) > 0.5:
+                        actual_profit_rate = 0.5 if actual_profit_rate > 0 else -0.5
+                    
+                    # trainer_storage에 이전 카드 추가
+                    try:
+                        trainer_data = load_trainer_storage()
+                        if not isinstance(trainer_data, list):
+                            trainer_data = []
+                        
+                        training_sample = {
+                            'card': prev_card,
+                            'profit_rate': float(actual_profit_rate),
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        trainer_data.append(training_sample)
+                        save_trainer_storage(trainer_data)
+                        
+                        result['prev_card_added'] = True
+                        result['actual_profit_rate'] = float(actual_profit_rate)
+                        logger.debug(f"[auto-train] Prev card added to trainer_storage: profit_rate={actual_profit_rate:.4f}")
+                    except Exception as e:
+                        logger.debug(f"[auto-train] Failed to save to trainer_storage: {e}")
+                    
+            except Exception as e:
+                logger.debug(f"[auto-train] Failed to calculate profit_rate: {e}")
+        
+        # Step 3: 5개 이상 샘플 축적되면 전체 재훈련
+        try:
+            trainer_data = load_trainer_storage()
+            if isinstance(trainer_data, list) and len(trainer_data) >= 5:
+                # nbverse도 포함
+                all_samples = _merge_training_samples()
+                if len(all_samples) >= 5:
+                    train_result = ml.train(all_samples)
+                    if train_result.get('ok'):
+                        result['full_retrain'] = {
+                            'train_count': train_result.get('train_count'),
+                            'mae': float(train_result.get('mae', 0))
+                        }
+                        logger.info(f"[auto-train] Full retrain: {train_result.get('train_count')} samples, MAE={train_result.get('mae'):.2f}")
+        except Exception as e:
+            logger.debug(f"[auto-train] Retrain check failed: {e}")
+        
+        # Step 4: 현재 카드로 AI 예측
+        try:
+            ai_prediction = ml.predict(card)
+            if ai_prediction.get('ok'):
+                result['current_prediction'] = {
+                    'enhancement': ai_prediction.get('enhancement'),
+                    'grade': ai_prediction.get('grade'),
+                    'method': ai_prediction.get('method')
+                }
+        except Exception as e:
+            logger.debug(f"[auto-train] Predict failed: {e}")
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"[api_ml_rating_auto_train] Error: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -6341,6 +6884,20 @@ def api_nbverse_save():
         realized_pnl = payload.get('realized_pnl', {})  # {avg, max}
         nb_wave = payload.get('nb_wave', {})  # {r, w, ema_diff, pct_blue, pct_orange, etc.}
         
+        # Build insight object from nb_zone for ML training compatibility
+        insight = {
+            'zone': nb_zone.get('zone', ''),
+            'zone_flag': nb_zone.get('zone_flag', 0),
+            'zone_conf': nb_zone.get('zone_conf', 0.0),
+            'dist_high': nb_zone.get('dist_high', 0.0),
+            'dist_low': nb_zone.get('dist_low', 0.0),
+            'r': nb_wave.get('r', 0.0),
+            'w': nb_wave.get('w', 0.0),
+            'ema_diff': nb_wave.get('ema_diff', 0.0),
+            'pct_blue': nb_wave.get('pct_blue', 0.0),
+            'pct_orange': nb_wave.get('pct_orange', 0.0)
+        }
+        
         # Save record (include full chart and all metadata)
         record = {
             'interval': interval,
@@ -6354,10 +6911,11 @@ def api_nbverse_save():
             'chart_count': len(chart_data),
             'card_rating': card_rating,
             'nb_zone': nb_zone,
+            'insight': insight,  # Add insight for ML training
             'ml_trust': ml_trust,
             'realized_pnl': realized_pnl,
             'nb_wave': nb_wave,
-            'version': 'nbverse.save.v4'
+            'version': 'nbverse.save.v5'
         }
         
         # Helper function to create path from N/B value
@@ -7726,7 +8284,7 @@ def auto_scheduler_loop():
                                 print(f"[AUTO] {interval}: 유효 데이터 부족 (필요: 100+, 현재: {len(feat)})")
                                 continue
                             
-                            # Zone 레이블 생성
+                            # Zone 레이블 생성 (다양한 임계값 사용으로 클래스 다양성 확보)
                             r = _compute_r_from_ohlcv(df, window)
                             HIGH = float(os.getenv('NB_HIGH', '0.55'))
                             LOW = float(os.getenv('NB_LOW', '0.45'))
@@ -7738,7 +8296,20 @@ def auto_scheduler_loop():
                             
                             # r과 feat의 인덱스를 맞춰서 추출
                             r_aligned = r.loc[feat.index]
-                            zone = np.where(r_aligned >= HIGH, -1, np.where(r_aligned <= LOW, 1, 0))
+                            
+                            # r 값 분포 확인 (디버깅)
+                            r_min, r_max, r_mean = float(r_aligned.min()), float(r_aligned.max()), float(r_aligned.mean())
+                            print(f"[AUTO] {interval}: r 분포 - min={r_min:.4f}, max={r_max:.4f}, mean={r_mean:.4f}")
+                            
+                            # 더 넓은 범위로 zone 분류 (클래스 다양성 확보)
+                            # BLUE(1): r < 0.48, HOLD(0): 0.48 <= r < 0.52, ORANGE(-1): r >= 0.52
+                            HIGH_WIDE = 0.52
+                            LOW_WIDE = 0.48
+                            
+                            zone = np.where(
+                                r_aligned >= HIGH_WIDE, -1,  # ORANGE
+                                np.where(r_aligned <= LOW_WIDE, 1, 0)  # BLUE or HOLD
+                            )
                             
                             # 특성 준비 - close, high, low 제외 및 fwd 제거
                             feature_cols = [c for c in feat.columns if c not in ['close', 'high', 'low', 'fwd']]
@@ -7746,16 +8317,50 @@ def auto_scheduler_loop():
                                 print(f"[AUTO] {interval}: 사용 가능한 특성 없음")
                                 continue
                             
-                            X = feat[feature_cols].values
-                            y = zone  # zone은 이미 numpy array
+                            X_raw = feat[feature_cols].values
+                            y_raw = zone  # zone은 이미 numpy array
+                            
+                            # ⚠️ NaN 처리 - 매우 중요!
+                            # NaN이 포함된 행 제거
+                            valid_mask = ~np.isnan(X_raw).any(axis=1)
+                            X = X_raw[valid_mask]
+                            y = y_raw[valid_mask]
+                            
+                            print(f"[AUTO] {interval}: NaN 제거 전 X.shape={X_raw.shape} → 제거 후 X.shape={X.shape}")
+                            
+                            if X.shape[0] < 50:
+                                print(f"[AUTO] {interval}: NaN 제거 후 데이터 부족 (필요: 50+, 현재: {X.shape[0]})")
+                                continue
                             
                             print(f"[AUTO] {interval}: X.shape={X.shape}, y.shape={y.shape}, classes={np.unique(y)}")
                             
-                            # 클래스 검증
+                            # 클래스 검증 및 데이터 증강
                             unique_classes = np.unique(y)
                             if len(unique_classes) < 2:
                                 print(f"[AUTO] {interval}: 클래스 부족 (필요: 2+, 현재: {len(unique_classes)}, 값: {unique_classes})")
-                                continue
+                                # 클래스 불균형 해결 시도: 백분위수 기반 동적 임계값
+                                try:
+                                    # r 값의 33%ile과 67%ile를 임계값으로 사용
+                                    low_percentile = np.percentile(r_aligned, 33)
+                                    high_percentile = np.percentile(r_aligned, 67)
+                                    
+                                    print(f"[AUTO] {interval}: 동적 임계값 - low={low_percentile:.4f}, high={high_percentile:.4f}")
+                                    
+                                    zone_dynamic = np.where(
+                                        r_aligned >= high_percentile, -1,
+                                        np.where(r_aligned <= low_percentile, 1, 0)
+                                    )
+                                    unique_dynamic = np.unique(zone_dynamic)
+                                    if len(unique_dynamic) >= 2:
+                                        print(f"[AUTO] {interval}: 동적 임계값 적용 성공 (classes: {unique_dynamic}))")
+                                        y = zone_dynamic
+                                        unique_classes = unique_dynamic
+                                    else:
+                                        print(f"[AUTO] {interval}: 데이터 증강 실패 - 학습 스킵")
+                                        continue
+                                except Exception as aug_err:
+                                    print(f"[AUTO] {interval}: 데이터 증강 오류: {aug_err}")
+                                    continue
                             
                             if len(X) > 100 and X.shape[1] > 0 and len(unique_classes) > 1:
                                 from sklearn.ensemble import GradientBoostingClassifier

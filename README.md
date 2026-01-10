@@ -130,6 +130,11 @@ Cards are automatically saved to disk for historical analysis and can be loaded 
 - N/B value (search by max/min value)
 - Price range (search by current price)
 
+## Security Update (2026-01-10)
+- Absolute `nbverse_path` is no longer stored in buy-card files (prevents path disclosure and ransomware-style misuse).
+- Dashboard Step 8 now fetches NBverse data **only via API** (`loadNbverseByNb`), never by direct file paths.
+- Existing historical cards may still contain `nbverse_path`; scrub/rotate old data if path exposure is a concern.
+
 ## Environment Variables
 
 ```bash
