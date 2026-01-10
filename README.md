@@ -169,9 +169,40 @@ python test_normalize.py
 python test_ohlcv.py
 ```
 
-## License
+## 📄 License
 
-MIT
+**GNU General Public License v3.0 (GPL-3.0)**
+
+This project is licensed under the GNU General Public License v3.0.
+
+### Key Points:
+- ✅ **Commercial Use**: You may use this software for commercial purposes
+- ✅ **Modification**: You may modify the source code
+- ✅ **Distribution**: You may distribute the software
+- ✅ **Patent Use**: Express grant of patent rights from contributors
+- ⚠️ **Disclose Source**: Source code must be made available when distributing
+- ⚠️ **License and Copyright Notice**: Must include original license and copyright
+- ⚠️ **Same License**: Modifications must be released under GPL-3.0
+- ⚠️ **State Changes**: Must document changes made to the code
+
+### What This Means:
+If you modify and distribute this bot, you **must**:
+1. Share your modified source code
+2. Keep the same GPL-3.0 license
+3. Credit the original authors
+4. Document your changes
+
+This is a **copyleft** license - it ensures the software and its derivatives remain free and open source.
+
+For the complete license text, see the [LICENSE](LICENSE) file or visit:
+https://www.gnu.org/licenses/gpl-3.0.html
+
+### Why GPL-3.0?
+We chose GPL-3.0 to:
+- Protect the open-source nature of this trading bot
+- Prevent proprietary forks without giving back to the community
+- Ensure improvements benefit everyone
+- Grant patent rights to all users
 
 ---
 
@@ -262,6 +293,37 @@ CANDLE_INTERVAL = "minute10"
 - **슈퍼 카드**: AAA 또는 SS 등급
 - **편향**: 오렌지 우세 → +, 블루 우세 → -
 
-## 라이선스
+## 📄 라이선스
 
-MIT
+**GNU General Public License v3.0 (GPL-3.0)**
+
+이 프로젝트는 GNU General Public License v3.0 라이선스 하에 배포됩니다.
+
+### 주요 내용:
+- ✅ **상업적 사용**: 상업적 목적으로 사용 가능
+- ✅ **수정**: 소스 코드 수정 가능
+- ✅ **배포**: 소프트웨어 배포 가능
+- ✅ **특허 사용**: 기여자로부터 특허 권리 명시적 부여
+- ⚠️ **소스 공개**: 배포 시 소스 코드 공개 의무
+- ⚠️ **라이선스 및 저작권 표시**: 원본 라이선스와 저작권 포함 필수
+- ⚠️ **동일 라이선스**: 수정본도 GPL-3.0으로 배포 필수
+- ⚠️ **변경 사항 명시**: 코드 변경 내역 문서화 필수
+
+### 의미:
+이 봇을 수정하고 배포할 경우 **반드시**:
+1. 수정된 소스 코드를 공개해야 함
+2. 동일한 GPL-3.0 라이선스를 유지해야 함
+3. 원저작자를 명시해야 함
+4. 변경 사항을 문서화해야 함
+
+이것은 **카피레프트(Copyleft)** 라이선스입니다 - 소프트웨어와 파생물이 자유롭고 오픈소스로 유지되도록 보장합니다.
+
+전체 라이선스 텍스트는 [LICENSE](LICENSE) 파일을 참조하거나 다음을 방문하세요:
+https://www.gnu.org/licenses/gpl-3.0.html
+
+### 왜 GPL-3.0인가?
+GPL-3.0을 선택한 이유:
+- 이 트레이딩 봇의 오픈소스 특성 보호
+- 커뮤니티에 기여하지 않는 독점 포크 방지
+- 개선 사항이 모두에게 혜택이 되도록 보장
+- 모든 사용자에게 특허 권리 부여
