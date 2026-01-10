@@ -1,0 +1,13 @@
+{
+  "trained_at": "2026-01-11T03:26:13.916359",
+  "train_count": 1071,
+  "train_loss": 0.0012904342729598284,
+  "test_loss": 0.0008471448090858757,
+  "train_mae": 0.018757615238428116,
+  "test_mae": 0.012587516568601131,
+  "sequence_length": 30,
+  "prediction_horizon": 10,
+  "gpu_enabled": false,
+  "epochs": 50,
+  "batch_size": 16
+}
