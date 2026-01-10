@@ -8,6 +8,12 @@
 - **상태**: Pre-release (사전 출시)
 - **안정성**: 개발 중 / 테스트 필요
 
+## 🎯 프로젝트 목표
+- **트레이딩 목표**: 1억원 달성
+- **전략**: N/B 지표 기반 자동화 알고리즘 트레이딩
+- **방식**: AI/ML 모델을 활용한 BLUE/ORANGE 존 분석 및 매매 신호 생성
+- **시장**: 바이낸스 암호화폐 거래소
+
 ## 🏷️ 태그
 `n/b` `trading-bot` `cryptocurrency` `binance` `machine-learning` `ai-trading` `technical-analysis` `ohlcv` `bit-calculation` `zone-analysis` `blue-zone` `orange-zone` `nb-indicator` `algorithmic-trading` `python` `tensorflow` `real-time-trading` `crypto-bot` `automated-trading` `quantitative-analysis`
 
