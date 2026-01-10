@@ -762,11 +762,126 @@ const FlowDashboard = (() => {
       winClientHistory.unshift(entry);
       winClientHistory = winClientHistory.slice(0, 200);
       window.winClientHistory = winClientHistory;
+
+      // Train/update script-based AI on new snapshot
+      try {
+        if (typeof ScriptAI !== 'undefined' && ScriptAI && typeof ScriptAI.onSnapshotAdded === 'function') {
+          ScriptAI.onSnapshotAdded(entry);
+        }
+      } catch(_) {}
       renderWinPanel();
     } catch (e) {
       console.warn('addCurrentWinSnapshot error:', e?.message);
     }
   }
+
+  // ============================================================================
+  // Script-based AI (no external ML): logistic regression on snapshots
+  // ============================================================================
+  const ScriptAI = (() => {
+    const WKEY = 'scriptAI_weights_v1';
+    const BKEY = 'scriptAI_bias_v1';
+    let weights = [0, 0, 0, 0];
+    let bias = 0;
+
+    function load() {
+      try {
+        const w = JSON.parse(localStorage.getItem(WKEY) || 'null');
+        const b = JSON.parse(localStorage.getItem(BKEY) || 'null');
+        if (Array.isArray(w) && w.length === 4) weights = w.map(Number);
+        if (typeof b === 'number') bias = b;
+      } catch(_) {}
+    }
+    function save() {
+      try {
+        localStorage.setItem(WKEY, JSON.stringify(weights));
+        localStorage.setItem(BKEY, JSON.stringify(bias));
+      } catch(_) {}
+    }
+
+    function getFeatures(ctx) {
+      const r = Number(ctx.rValue ?? 0.5);
+      const w = Number(ctx.w ?? 0.5);
+      const rw = r - w; // zone tilt
+      let mom = 0;
+      try {
+        const cds = (window.candleDataCache || []).slice(-5);
+        if (cds.length >= 2) {
+          const p = Number(cds[cds.length-1]?.close || cds[cds.length-1]?.value || 0);
+          const q = Number(cds[cds.length-2]?.close || cds[cds.length-2]?.value || 0);
+          if (q) mom = (p - q) / q;
+        }
+      } catch(_) {}
+      const vol = Number(ctx.volume ?? 0) > 0 ? Math.log10(Number(ctx.volume)) : 0;
+      const mag = Number(ctx.magnitude ?? 0);
+      return [rw, mom, vol, mag];
+    }
+
+    function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
+
+    function predict(ctx) {
+      const x = getFeatures(ctx);
+      const z = (weights[0]*x[0]) + (weights[1]*x[1]) + (weights[2]*x[2]) + (weights[3]*x[3]) + bias;
+      const p = sigmoid(z);
+      const zone = p >= 0.5 ? 'BLUE' : 'ORANGE';
+      const conf = Math.abs(p - 0.5) * 200; // 0-100
+      return { zone, confidence: conf, p };
+    }
+
+    function trainFromSnapshots(snaps, epochs=30, lr=0.1) {
+      if (!Array.isArray(snaps) || snaps.length < 10) return;
+      for (let e=0; e<epochs; e++) {
+        for (let i=0; i<snaps.length; i++) {
+          const s = snaps[i];
+          const ctx = {
+            rValue: Number(s.waveR ?? state.nbStats?.rValue ?? 0.5),
+            w: Number(s.waveW ?? state.nbStats?.w ?? 0.5),
+            volume: Number(s.current_volume ?? 0),
+            magnitude: Number(s.avgPts ?? 0)
+          };
+          const x = getFeatures(ctx);
+          const y = s.zone === 'BLUE' ? 1 : 0;
+          const z = (weights[0]*x[0]) + (weights[1]*x[1]) + (weights[2]*x[2]) + (weights[3]*x[3]) + bias;
+          const p = sigmoid(z);
+          const err = p - y;
+          // gradient update
+          weights[0] -= lr * err * x[0];
+          weights[1] -= lr * err * x[1];
+          weights[2] -= lr * err * x[2];
+          weights[3] -= lr * err * x[3];
+          bias      -= lr * err;
+        }
+      }
+      save();
+    }
+
+    function currentContext() {
+      return {
+        rValue: Number(state.nbStats?.rValue ?? 0.5),
+        w: Number(state.nbStats?.w ?? 0.5),
+        volume: 0,
+        magnitude: Number(window.ccCurrentRating?.avgPts ?? 0)
+      };
+    }
+
+    function onSnapshotAdded() {
+      try {
+        const snaps = (window.winClientHistory || []).slice(0, 100);
+        trainFromSnapshots(snaps, 20, 0.08);
+      } catch(_) {}
+    }
+
+    function getPrediction() {
+      load();
+      const pred = predict(currentContext());
+      window.scriptAiPrediction = pred;
+      return pred;
+    }
+
+    return { getPrediction, onSnapshotAdded };
+  })();
+
+  window.ScriptAI = ScriptAI;
 
   async function fetchNBZoneStatus(interval) {
     // Prefer chart-fetched data if present; otherwise hit API
@@ -1616,6 +1731,61 @@ const FlowDashboard = (() => {
         // 초기에는 비워둠 (updateNBPrediction 호출 시 업데이트)
         nbPredictionSeries.setData([]);
 
+        // Wave-only Price Prediction (no AI): project future price using recent volatility and N/B zone bias
+        try {
+          let wavePricePredSeries = chart._wavePricePredSeries;
+          if (!wavePricePredSeries) {
+            wavePricePredSeries = chart.addLineSeries({
+              color: '#ffd166',
+              lineWidth: 2,
+              lineStyle: 2, // dashed
+              priceLineVisible: false,
+              lastValueVisible: false
+            });
+            chart._wavePricePredSeries = wavePricePredSeries;
+          }
+
+          const lastCandle = sortedCandles[sortedCandles.length - 1];
+          const lastClose = Number(lastCandle?.close || 0);
+          const timeStep = (sortedCandles.length > 1)
+            ? (sortedCandles[1].time - sortedCandles[0].time)
+            : 60; // fallback 60s
+          const horizon = 10;
+
+          // Recent absolute returns as volatility proxy
+          const lookback = Math.min(30, closes.length - 1);
+          let sumAbs = 0;
+          for (let i = 1; i <= lookback; i++) {
+            const p = closes[closes.length - i];
+            const q = closes[closes.length - i - 1];
+            if (q && p) sumAbs += Math.abs((p - q) / q);
+          }
+          const avgAbsRet = lookback > 0 ? (sumAbs / lookback) : 0.001;
+          // Clamp to sensible bounds
+          const vol = Math.max(0.0001, Math.min(0.02, avgAbsRet));
+
+          // Zone bias: BLUE → upward, ORANGE → downward
+          const zone = (state.currentZone || '').toUpperCase();
+          const sign = zone === 'BLUE' ? 1 : zone === 'ORANGE' ? -1 : 0;
+          // Strength from r/w (distance from neutrality 0.5)
+          const rVal = Number(state.nbStats?.rValue ?? 0.5);
+          const wVal = Number(state.nbStats?.w ?? 0.5);
+          const strength = 0.2 + Math.min(0.8, Math.abs(Math.max(rVal, wVal) - 0.5) * 2);
+          const alpha = sign * vol * strength;
+
+          const pred = [];
+          let price = lastClose;
+          for (let i = 1; i <= horizon; i++) {
+            const decay = 1 - (i / horizon) * 0.5; // gentle tapering
+            price = price * (1 + alpha * decay);
+            pred.push({ time: lastCandle.time + timeStep * i, value: price });
+          }
+
+          wavePricePredSeries.setData(pred);
+        } catch (e) {
+          console.debug('Wave-only prediction render error:', e?.message);
+        }
+
         // EMA/Trust legend (top-left)
         const legendId = 'chartLegendBox';
         let legend = container.querySelector(`#${legendId}`);
@@ -1643,6 +1813,8 @@ const FlowDashboard = (() => {
         const mlLegend = state.mlStats || {};
         const nbTrustTxt = nbLegend.nbTrust != null ? `${nbLegend.nbTrust.toFixed(1)}%` : '-';
         const mlTrustTxt = mlLegend.mlTrust != null ? `${mlLegend.mlTrust.toFixed(1)}%` : '-';
+        const scriptAi = (window.ScriptAI && typeof window.ScriptAI.getPrediction === 'function') ? window.ScriptAI.getPrediction() : null;
+        const scriptAiTxt = scriptAi ? `${scriptAi.zone} ${scriptAi.confidence.toFixed(1)}%` : '-';
         legend.innerHTML = `
           <div style="display:flex; gap:8px; align-items:center;">
             <span style="display:inline-flex; align-items:center; gap:4px;"><span style="width:10px;height:2px;background:rgba(14,203,129,0.9);"></span>EMA10</span>
@@ -1650,6 +1822,7 @@ const FlowDashboard = (() => {
           </div>
           <div style="margin-top:4px;">NB Trust: ${nbTrustTxt}</div>
           <div>ML Trust: ${mlTrustTxt}</div>
+          <div>ScriptAI: ${scriptAiTxt}</div>
         `;
 
         // Restore saved chart view BEFORE fitContent (마우스 조정 뷰 복한 - 우선순위)
