@@ -4338,9 +4338,9 @@ async function renderBuyOrderList(orders, interval) {
     return p;
   })();
 
-  // 각 카드의 NBverse 정보를 조회하여 표시
+  // 각 카드의 NBverse 정보를 조회하여 표시 (최근 10개만 유지)
   const cardsWithNbverse = await Promise.all(
-    orders.slice(0, 50).map(async (o, idx) => {
+    orders.slice(0, 10).map(async (o, idx) => {
       const price = Number(o.price || 0);
       let nbverseInfo = null; // 검색 사용 안 함
 
