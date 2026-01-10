@@ -8,37 +8,39 @@ const FlowDashboard = (() => {
     marketData: null,
     signalData: null,
     tradeData: null,
-    selectedInterval: 'minute10',
-    // 기본 타임프레임 순회 목록 (1분~60분)
-    timeframes: ['minute1', 'minute3', 'minute5', 'minute10', 'minute15', 'minute30', 'minute60'],
-    currentTfIndex: 3, // minute10
     nbWave: null,
-    nbWaveZones: [],
-    nbWaveZonesConsole: [],
-    zoneSeries: [],
-    nbStats: {},
-    mlStats: {},
+    nbWaveZones: null,
+    zoneSeries: null,
+    nbStats: null,
+    mlStats: null,
+    currentZone: null,
+    selectedInterval: 'minute10',
+    timeframes: ['minute1', 'minute3', 'minute5', 'minute10', 'minute15', 'minute30', 'minute60', 'minute240', 'day'],
+    currentTfIndex: 3,
     waveSegmentCount: null,
-    savedNbWaveData: null
+    savedNbWaveData: null,
+    nbWaveCached: null
   };
 
-  // Timeframe label helper (UI-friendly labels)
-  const timeframeLabel = {
-    minute1: '1m',
-    minute3: '3m',
-    minute5: '5m',
-    minute10: '10m',
-    minute15: '15m',
-    minute30: '30m',
-    minute60: '1h',
-    day: '1D'
-  };
-
-  // Client-side win snapshot history store
-  let winClientHistory = Array.isArray(window.winClientHistory) ? window.winClientHistory : [];
-  // Charts (instances)
   let winGradeTrendChart = null;
   let ccSummaryChart = null;
+
+  // Shared references
+  let ccCurrentData = window.ccCurrentData || null;
+  let winClientHistory = Array.isArray(window.winClientHistory) ? window.winClientHistory : [];
+
+  // Timeframe labels for UI
+  const timeframeLabel = {
+    minute1: '1분',
+    minute3: '3분',
+    minute5: '5분',
+    minute10: '10분',
+    minute15: '15분',
+    minute30: '30분',
+    minute60: '1시간',
+    minute240: '4시간',
+    day: '1일'
+  };
 
   // Live price polling (updates window.candleDataCache)
   let livePricePoller = null;
@@ -372,7 +374,7 @@ const FlowDashboard = (() => {
     ccSummaryChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: futureLabels,
+        labels: labels,
         datasets: [
           {
             label: '가격',
@@ -398,22 +400,6 @@ const FlowDashboard = (() => {
             pointRadius: 0.5,
             pointBackgroundColor: '#0ecb81',
             yAxisID: 'y1'
-          },
-          {
-            label: `AI 예측 (${mlAction || 'N/A'})`,
-            data: predictionData,
-            borderColor: predBorderColor,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            borderDash: [5, 5], // 점선
-            fill: false,
-            tension: 0,
-            pointRadius: predictionData.map((v, i) => i === predictionData.length - 1 ? 20 : 0), // 마지막만 크게
-            pointHoverRadius: predictionData.map((v, i) => i === predictionData.length - 1 ? 25 : 0),
-            pointBackgroundColor: predictionData.map((v, i) => i === predictionData.length - 1 ? predColor : 'transparent'),
-            pointBorderColor: predictionData.map((v, i) => i === predictionData.length - 1 ? predBorderColor : 'transparent'),
-            pointBorderWidth: 3,
-            yAxisID: 'y'
           }
         ]
       },
@@ -1742,9 +1728,8 @@ const FlowDashboard = (() => {
           let wavePricePredSeries = chart._wavePricePredSeries;
           if (!wavePricePredSeries) {
             wavePricePredSeries = chart.addLineSeries({
-              color: '#ffd166',
-              lineWidth: 2,
-              lineStyle: 2, // dashed
+              color: 'transparent',
+              lineWidth: 0,
               priceLineVisible: false,
               lastValueVisible: false
             });
@@ -1770,9 +1755,11 @@ const FlowDashboard = (() => {
           // Clamp to sensible bounds
           const vol = Math.max(0.0001, Math.min(0.02, avgAbsRet));
 
-          // Zone bias: BLUE → upward, ORANGE → downward
-          const zone = (state.currentZone || '').toUpperCase();
-          const sign = zone === 'BLUE' ? 1 : zone === 'ORANGE' ? -1 : 0;
+          // Zone bias: prefer ScriptAI → ML → NB current zone
+          const mlZone = (state.mlStats?.mlZone || '').toUpperCase();
+          const scriptAi = (window.ScriptAI && typeof window.ScriptAI.getPrediction === 'function') ? window.ScriptAI.getPrediction() : null;
+          const aiZone = (scriptAi?.zone || mlZone || state.currentZone || 'NONE').toUpperCase();
+          const sign = aiZone === 'BLUE' ? 1 : aiZone === 'ORANGE' ? -1 : 0;
           // Strength from r/w (distance from neutrality 0.5)
           const rVal = Number(state.nbStats?.rValue ?? 0.5);
           const wVal = Number(state.nbStats?.w ?? 0.5);
@@ -1788,6 +1775,10 @@ const FlowDashboard = (() => {
           }
 
           wavePricePredSeries.setData(pred);
+          // Transparent circle markers colored by AI zone
+          const circleColor = aiZone === 'BLUE' ? 'rgba(0,209,255,0.35)' : aiZone === 'ORANGE' ? 'rgba(255,183,3,0.35)' : 'rgba(128,128,128,0.3)';
+          const markers = pred.map(p => ({ time: p.time, position: 'aboveBar', color: circleColor, shape: 'circle', size: 2 }));
+          try { wavePricePredSeries.setMarkers(markers); } catch(_) {}
         } catch (e) {
           console.debug('Wave-only prediction render error:', e?.message);
         }

@@ -353,22 +353,7 @@ SUPER_BIT = 0
 
 
 def initialize_arrays(count):
-    """Initialize arrays for BIT calculations (GPU optimized)"""
-    if GPU_AVAILABLE and count > 1000:
-        try:
-            # TensorFlow로 초기화 (GPU)
-            arrays = {
-                'BIT_START_A50': tf.zeros(count, dtype=tf.float32).numpy(),
-                'BIT_START_A100': tf.zeros(count, dtype=tf.float32).numpy(),
-                'BIT_START_B50': tf.zeros(count, dtype=tf.float32).numpy(),
-                'BIT_START_B100': tf.zeros(count, dtype=tf.float32).numpy(),
-                'BIT_START_NBA100': tf.zeros(count, dtype=tf.float32).numpy()
-            }
-            return arrays
-        except:
-            pass
-    
-    # CPU fallback
+    """Initialize arrays for BIT calculations (CPU version)"""
     arrays = ['BIT_START_A50', 'BIT_START_A100', 'BIT_START_B50', 'BIT_START_B100', 'BIT_START_NBA100']
     initialized_arrays = {}
     for array in arrays:
@@ -376,36 +361,24 @@ def initialize_arrays(count):
     return initialized_arrays
 
 
-def calculate_bit(nb, bit=99.9999999999, reverse=False):
-    """Calculate N/B value with median and threshold analysis (GPU accelerated)
-    
-    Args:
-        nb: List of N/B values
-        bit: BIT value (default: 99.9999999999)
-        reverse: If True, reverse time flow analysis
-        
-    Returns:
-        Calculated NB50 value
-    """
+def calculate_bit(nb, bit=5.5, reverse=False):
+    """Calculate N/B value (CPU version, matches original logic)"""
     if len(nb) < 2:
         return bit / 100
-    
-    # CPU 원본 로직만 사용 (GPU 최적화는 인덱싱 문제로 비활성화)
-    # CPU 원본 로직
-    
+
     BIT_NB = bit
     max_val = max(nb)
     min_val = min(nb)
     COUNT = 150
     CONT = 20
     range_val = max_val - min_val
-    
-    # Separate negative and positive ranges
+
     negative_range = abs(min_val) if min_val < 0 else 0
     positive_range = max_val if max_val > 0 else 0
-    
-    negative_increment = negative_range / (COUNT * len(nb) - 1) if (COUNT * len(nb) - 1) > 0 else 0
-    positive_increment = positive_range / (COUNT * len(nb) - 1) if (COUNT * len(nb) - 1) > 0 else 0
+
+    denom = (COUNT * len(nb) - 1)
+    negative_increment = negative_range / denom if denom > 0 else 0
+    positive_increment = positive_range / denom if denom > 0 else 0
     
     arrays = initialize_arrays(COUNT * len(nb))
     count = 0
@@ -441,9 +414,8 @@ def calculate_bit(nb, bit=99.9999999999, reverse=False):
         
         total_sum += value
     
-    # Reverse option processing
     if reverse:
-        arrays['BIT_START_NBA100'].reverse()
+        arrays['BIT_START_NBA100'] = list(reversed(arrays['BIT_START_NBA100']))
     
     # Calculate NB50
     NB50 = 0
@@ -453,10 +425,9 @@ def calculate_bit(nb, bit=99.9999999999, reverse=False):
                 NB50 += arrays['BIT_START_NBA100'][min(a, len(arrays['BIT_START_NBA100']) - 1)]
                 break
     
-    # Special case for 2 elements
     if len(nb) == 2:
         return bit - NB50
-    
+
     return NB50
 
 
@@ -466,7 +437,7 @@ def update_super_bit(new_value):
     SUPER_BIT = new_value
 
 
-def BIT_MAX_NB(nb_values, bit=99.9999999999):
+def BIT_MAX_NB(nb_values, bit=5.5):
     """Calculate BIT MAX N/B value (forward time flow analysis)
     
     Args:
@@ -492,7 +463,7 @@ def BIT_MAX_NB(nb_values, bit=99.9999999999):
         return float(SUPER_BIT)
 
 
-def BIT_MIN_NB(nb_values, bit=99.9999999999):
+def BIT_MIN_NB(nb_values, bit=5.5):
     """Calculate BIT MIN N/B value (reverse time flow analysis)
     
     Args:
@@ -519,23 +490,11 @@ def BIT_MIN_NB(nb_values, bit=99.9999999999):
 
 
 def calculate_array_order_and_duplicate(nb1, nb2):
-    """Compare two arrays for order matching and duplicates (CPU optimized)
-    
-    Args:
-        nb1: First array
-        nb2: Second array
-        
-    Returns:
-        Dictionary with comparison metrics
-    """
+    """Compare two arrays for order matching and duplicates (CPU version)"""
     try:
-        order_match = 0
-        max_order_match = 0
-        duplicate_match = 0
-        
         length1 = len(nb1)
         length2 = len(nb2)
-        
+
         if length1 == 0 or length2 == 0:
             return {
                 'orderMatchRatio': 0.0,
@@ -544,31 +503,32 @@ def calculate_array_order_and_duplicate(nb1, nb2):
                 'duplicateMatchRatioRight': 0.0,
                 'lengthDifference': 0.0
             }
-        
-        # Count duplicates
+
+        order_match = 0
+        max_order_match = 0
+        duplicate_match = 0
+
         element_count1 = {}
         element_count2 = {}
-        
+
         for value in nb1:
             try:
-                value_key = float(value) if isinstance(value, (int, float)) else str(value)
-                element_count1[value_key] = element_count1.get(value_key, 0) + 1
-            except:
+                key = float(value) if isinstance(value, (int, float)) else str(value)
+                element_count1[key] = element_count1.get(key, 0) + 1
+            except Exception:
                 pass
-        
+
         for value in nb2:
             try:
-                value_key = float(value) if isinstance(value, (int, float)) else str(value)
-                element_count2[value_key] = element_count2.get(value_key, 0) + 1
-            except:
+                key = float(value) if isinstance(value, (int, float)) else str(value)
+                element_count2[key] = element_count2.get(key, 0) + 1
+            except Exception:
                 pass
-        
-        # Calculate duplicate matches
+
         for key in element_count1:
             if key in element_count2:
                 duplicate_match += min(element_count1[key], element_count2[key])
-        
-        # Calculate order matches (안전한 비교)
+
         for i in range(length1):
             for j in range(length2):
                 try:
@@ -576,31 +536,29 @@ def calculate_array_order_and_duplicate(nb1, nb2):
                         temp_match = 0
                         x = i
                         y = j
-                        
+
                         while x < length1 and y < length2 and float(nb1[x]) == float(nb2[y]):
                             temp_match += 1
                             x += 1
                             y += 1
-                        
+
                         if temp_match > max_order_match:
                             max_order_match = temp_match
-                except:
+                except Exception:
                     pass
-        
+
         order_match = max_order_match
-        
-        # Calculate ratios
+
         order_match_ratio = (order_match / min(length1, length2)) * 100 if min(length1, length2) > 0 else 0
         duplicate_match_ratio_left = (duplicate_match / length1) * 100 if length1 > 0 else 0
         duplicate_match_ratio_right = (duplicate_match / length2) * 100 if length2 > 0 else 0
         duplicate_match_ratio = (duplicate_match_ratio_left + duplicate_match_ratio_right) / 2
-        
-        # Length difference
+
         if length2 < length1:
             length_difference = (length2 / length1) * 100 if length1 > 0 else 0
         else:
             length_difference = (length1 / length2) * 100 if length2 > 0 else 0
-        
+
         return {
             'orderMatchRatio': float(order_match_ratio),
             'duplicateMatchRatio': float(duplicate_match_ratio),
@@ -608,7 +566,7 @@ def calculate_array_order_and_duplicate(nb1, nb2):
             'duplicateMatchRatioRight': float(duplicate_match_ratio_right),
             'lengthDifference': float(length_difference)
         }
-    except Exception as e:
+    except Exception:
         return {
             'orderMatchRatio': 0.0,
             'duplicateMatchRatio': 0.0,
@@ -616,48 +574,6 @@ def calculate_array_order_and_duplicate(nb1, nb2):
             'duplicateMatchRatioRight': 0.0,
             'lengthDifference': 0.0
         }
-        if key in element_count2:
-            duplicate_match += min(element_count1[key], element_count2[key])
-    
-    # Calculate order matches
-    for i in range(length1):
-        for j in range(length2):
-            if nb1[i] == nb2[j]:
-                temp_match = 0
-                x = i
-                y = j
-                
-                while x < length1 and y < length2 and nb1[x] == nb2[y]:
-                    temp_match += 1
-                    x += 1
-                    y += 1
-                
-                if temp_match > max_order_match:
-                    max_order_match = temp_match
-    
-    order_match = max_order_match
-    
-    # Calculate ratios
-    order_match_ratio = (order_match / min(length1, length2)) * 100 if min(length1, length2) > 0 else 0
-    
-    duplicate_match_ratio_left = (duplicate_match / length1) * 100 if length1 > 0 else 0
-    duplicate_match_ratio_right = (duplicate_match / length2) * 100 if length2 > 0 else 0
-    
-    duplicate_match_ratio = (duplicate_match_ratio_left + duplicate_match_ratio_right) / 2
-    
-    # Length difference
-    if length2 < length1:
-        length_difference = (length2 / length1) * 100 if length1 > 0 else 0
-    else:
-        length_difference = (length1 / length2) * 100 if length2 > 0 else 0
-    
-    return {
-        'orderMatchRatio': order_match_ratio,
-        'duplicateMatchRatio': duplicate_match_ratio,
-        'duplicateMatchRatioLeft': duplicate_match_ratio_left,
-        'duplicateMatchRatioRight': duplicate_match_ratio_right,
-        'lengthDifference': length_difference
-    }
 
 
 def calculate_inclusion_from_base(sentence1, sentence2):
@@ -1060,26 +976,5 @@ def cosine_similarity(vec1, vec2):
         
         result = dot_product / (magnitude1 * magnitude2)
         return float(result) if np.isfinite(result) else 0.0
-    except Exception:
-        return 0.0
-
-
-def calculate_array_similarity(array1, array2):
-    """Calculate Jaccard and ordered similarity between two arrays"""
-    try:
-        if not array1 or not array2:
-            return 0.0
-        
-        # Jaccard similarity
-        intersection = [value for value in array1 if value in array2]
-        union = list(set(array1 + array2))
-        jaccard_similarity = (len(intersection) / len(union)) * 100 if len(union) > 0 else 0
-        
-        # Ordered similarity
-        ordered_matches = sum(1 for i in range(min(len(array1), len(array2))) if array1[i] == array2[i])
-        ordered_similarity = (ordered_matches / max(len(array1), len(array2))) * 100 if max(len(array1), len(array2)) > 0 else 0
-        
-        # Combined similarity (50% weight each)
-        return float((jaccard_similarity * 0.5) + (ordered_similarity * 0.5))
     except Exception:
         return 0.0
