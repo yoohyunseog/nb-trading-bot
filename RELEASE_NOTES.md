@@ -8,6 +8,9 @@
 - **상태**: Pre-release (사전 출시)
 - **안정성**: 개발 중 / 테스트 필요
 
+## 🏷️ 태그
+`n/b` `trading-bot` `cryptocurrency` `binance` `machine-learning` `ai-trading` `technical-analysis` `ohlcv` `bit-calculation` `zone-analysis` `blue-zone` `orange-zone` `nb-indicator` `algorithmic-trading` `python` `tensorflow` `real-time-trading` `crypto-bot` `automated-trading` `quantitative-analysis`
+
 ## 🔧 주요 변경사항
 
 ### features.py 로직 복원
