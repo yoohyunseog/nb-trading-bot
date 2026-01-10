@@ -1067,7 +1067,7 @@ const FlowDashboard = (() => {
       // Clean up all timers and pollings to prevent memory leaks
       stopLivePricePolling();
       if (window.buyCardRefreshInterval) { clearInterval(window.buyCardRefreshInterval); window.buyCardRefreshInterval = null; }
-      AutoBuy.stop();
+      // Auto Buy 상태는 사용자 의사대로 유지 (강제 중지하지 않음)
       
       this.currentStep = 0;
       $('.step-num')
@@ -2773,6 +2773,7 @@ const FlowDashboard = (() => {
     startTime: null,
     durationMs: 0,
     initialized: false, // 초기화 여부 플래그
+    serverStateSynced: false, // 서버 상태 동기화 여부 플래그
     elements: {
       toggleBtn: null,
       statusBadge: null,
@@ -2882,8 +2883,11 @@ const FlowDashboard = (() => {
         
         console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly });
         
-        // 서버에서 실제 상태 가져오기
-        this.syncServerState();
+        // 서버에서 실제 상태 가져오기 (최초 1회만)
+        if (!this.serverStateSynced) {
+          this.serverStateSynced = true;
+          this.syncServerState();
+        }
       } catch (err) {
         console.warn('Auto Buy 설정 복원 실패:', err);
       }
@@ -2894,43 +2898,36 @@ const FlowDashboard = (() => {
         const resp = await fetch('/api/auto-buy/status');
         const data = await resp.json();
         
-        if (data.ok) {
+        if (data && data.ok) {
           console.log('🔄 서버 Auto Buy 상태 동기화:', data);
           
-          // 서버에서 enabled=true이면 자동 시작
+          // 이미 실행 중이면 서버 상태로 덮어쓰지 않음
+          if (this.running) {
+            console.log('ℹ️ Auto Buy 이미 실행 중 → 서버 상태 동기화 건너뜀');
+            return;
+          }
+          
+          // 서버가 ON이면 클라이언트 타이머 복원 또는 시작
           if (data.enabled) {
-            console.log('✅ 서버에 Auto Buy가 ON 상태 → 타이머 복원');
-            
-            // localStorage에 저장된 시간 정보 확인
+            console.log('✅ 서버 Auto Buy ON → 타이머 복원/시작');
             const savedStartTime = localStorage.getItem('autoBuy_startTime');
             const savedDurationMs = localStorage.getItem('autoBuy_durationMs');
             
-            if (savedStartTime && savedDurationMs && !this.running) {
-              // 저장된 타이머가 있으면 resume으로 복원
-              console.log('⏰ 저장된 타이머 정보 발견 → resume()');
-              setTimeout(() => {
-                if (!this.running) {
-                  this.resume();
-                }
-              }, 500);
-            } else if (!this.running) {
-              // 저장된 타이머가 없으면 새로 시작
-              console.log('🆕 새로운 타이머로 시작');
+            if (savedStartTime && savedDurationMs) {
+              console.log('⏰ 저장된 타이머 존재 → resume()');
+              setTimeout(() => { if (!this.running) this.resume(); }, 500);
+            } else {
+              console.log('🆕 저장된 타이머 없음 → 새 시작');
               localStorage.setItem('autoBuy_running', 'true');
-              
               setTimeout(() => {
                 if (this.elements.toggleBtn && !this.running) {
-                  this.elements.toggleBtn.click(); // 시작 버튼 클릭
+                  this.elements.toggleBtn.click();
                 }
               }, 500);
             }
           } else {
-            console.log('ℹ️ 서버 Auto Buy는 OFF 상태');
-            
-            // 서버가 OFF면 클라이언트도 중지
-            if (this.running) {
-              this.stop();
-            }
+            // 서버가 OFF여도 클라이언트는 유지 (사용자 의사 존중)
+            console.log('ℹ️ 서버 Auto Buy OFF → 클라이언트 상태 유지');
           }
         }
       } catch (err) {
@@ -4759,12 +4756,15 @@ $(document).ready(function() {
     }
   }, 30 * 60 * 1000);  // 30분마다
   
+  // 버튼 이벤트 바인딩
   try {
     $('#ccBuy').on('click', () => FlowDashboard.executeBuy());
   } catch(_) {}
+  
   try {
     $('#ccPaperBuy').on('click', () => FlowDashboard.executeBuyPaper());
   } catch(_) {}
+  
   try {
     $('#ccRefresh').on('click', async () => {
       const res = await FlowDashboard.refreshMarketData();
@@ -4772,6 +4772,7 @@ $(document).ready(function() {
       $('#systemStatus').text(msg);
     });
   } catch(_) {}
+  
   try {
     $('#ccSave').on('click', () => FlowDashboard.saveCurrentCard && FlowDashboard.saveCurrentCard());
   } catch(_) {}
