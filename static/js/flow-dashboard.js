@@ -979,6 +979,8 @@ const FlowDashboard = (() => {
   async function autoSaveCurrentCard() {
     if (!ccCurrentData) return;
     try {
+      if (window.isAutoSaving) return;
+      window.isAutoSaving = true;
       // Gather all card metadata for complete save
       const savePayload = {
         ...ccCurrentData,
@@ -1021,6 +1023,8 @@ const FlowDashboard = (() => {
         console.log('✅ 자동 저장 완료:', savePayload.interval, `(${result.count || 1}개 경로)`);
         const hint = document.getElementById('ccSaveHint');
         if (hint) hint.textContent = `✅ 저장 완료 (${result.count || 1}개)`;
+        window.lastAutoSaveTs = Date.now();
+        window.isAutoSaving = false;
         
         // 온라인 학습 트리거: 카드 등급 + 강화도 저장
         if (ccCurrentRating && ccCurrentRating.enhancement) {
@@ -1028,9 +1032,11 @@ const FlowDashboard = (() => {
         }
       } else {
         console.warn('⚠️ 자동 저장 실패:', result?.error || 'Unknown');
+        window.isAutoSaving = false;
       }
     } catch (err) {
       console.warn('⚠️ 자동 저장 에러:', err?.message);
+      window.isAutoSaving = false;
     }
   }
 
@@ -4948,5 +4954,21 @@ $(document).ready(function() {
   
   try {
     $('#ccSave').on('click', () => FlowDashboard.saveCurrentCard && FlowDashboard.saveCurrentCard());
+  } catch(_) {}
+
+  // Real-time periodic autosave loop (every 30s, throttled to 60s)
+  try {
+    if (!window.autoSaveIntervalId) {
+      window.autoSaveIntervalId = setInterval(() => {
+        try {
+          const now = Date.now();
+          const last = Number(window.lastAutoSaveTs || 0);
+          const elapsed = now - last;
+          if (elapsed < 60000) return; // min 60s between saves
+          if (!window.ccCurrentData) return; // need current card
+          autoSaveCurrentCard();
+        } catch(e) { console.debug('Autosave loop error:', e?.message); }
+      }, 30000);
+    }
   } catch(_) {}
 });
