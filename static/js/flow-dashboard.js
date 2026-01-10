@@ -3,6 +3,80 @@ const FlowDashboard = (() => {
    * Flow Dashboard Module
    * 8BIT Trading Bot - Flow-based Trading Interface
    */
+
+  // ===== STATE PERSISTENCE MANAGER =====
+  class StateManager {
+    constructor(storageKey = 'flowDashboard') {
+      this.key = storageKey;
+      this.version = '1.0';
+    }
+
+    save(state) {
+      // Save state to localStorage with timestamp
+      const data = {
+        version: this.version,
+        timestamp: Date.now(),
+        state: state
+      };
+      try {
+        localStorage.setItem(this.key, JSON.stringify(data));
+        console.log('✅ State saved to localStorage');
+        return true;
+      } catch (err) {
+        console.error('❌ Failed to save state:', err);
+        return false;
+      }
+    }
+
+    load() {
+      // Load state from localStorage
+      try {
+        const saved = localStorage.getItem(this.key);
+        if (!saved) return null;
+        const data = JSON.parse(saved);
+        console.log('✅ State loaded from localStorage (timestamp:', new Date(data.timestamp).toLocaleTimeString(), ')');
+        return data.state;
+      } catch (err) {
+        console.error('❌ Failed to load state:', err);
+        return null;
+      }
+    }
+
+    restore(targetObject) {
+      // Restore state to target object (e.g., window.flowDashboardState)
+      const saved = this.load();
+      if (saved && typeof targetObject === 'object') {
+        Object.assign(targetObject, saved);
+        console.log('✅ State restored to object');
+        return true;
+      }
+      return false;
+    }
+
+    clear() {
+      // Clear saved state
+      try {
+        localStorage.removeItem(this.key);
+        console.log('✅ State cleared from localStorage');
+        return true;
+      } catch (err) {
+        console.error('❌ Failed to clear state:', err);
+        return false;
+      }
+    }
+
+    getSize() {
+      // Get size of saved state in bytes
+      const saved = localStorage.getItem(this.key);
+      return saved ? new Blob([saved]).size : 0;
+    }
+  }
+
+  const stateManager = new StateManager('flowDashboardState');
+  
+  // Expose StateManager globally
+  window.stateManager = stateManager;
+
   const state = window.flowDashboardState || {
     currentStep: 1,
     marketData: null,
@@ -27,6 +101,7 @@ const FlowDashboard = (() => {
 
   // Shared references
   let ccCurrentData = window.ccCurrentData || null;
+  let ccCurrentRating = window.ccCurrentRating || null; // ✅ 초기화 필수
   let winClientHistory = Array.isArray(window.winClientHistory) ? window.winClientHistory : [];
 
   // Timeframe labels for UI
@@ -81,9 +156,9 @@ const FlowDashboard = (() => {
       try {
         if (!Array.isArray(window.candleDataCache)) window.candleDataCache = [];
         window.candleDataCache.push(latest);
-        // keep recent window to avoid unbounded growth
-        if (window.candleDataCache.length > 600) {
-          window.candleDataCache = window.candleDataCache.slice(-600);
+        // 메모리 누수 방지: 최근 24개 캔들만 유지
+        if (window.candleDataCache.length > 24) {
+          window.candleDataCache = window.candleDataCache.slice(-24);
         }
       } catch(_) {}
     }, 3000); // poll every 3s to keep UI fresh without overloading API
@@ -123,6 +198,64 @@ const FlowDashboard = (() => {
     }
   }
 
+  // ===== CARD RATING HELPER FUNCTIONS (Refactored) =====
+  function calculateRScore(max, min) {
+    // Calculate R score (0~1) based on MAX + MIN: ratio analysis
+    const sum = max + min;
+    const ratio = max > 0 && min > 0 ? max / min : 1;
+    const sumScore = Math.min(0.5, sum / 198 * 0.5);
+    const ratioScore = ratio > 1 
+      ? Math.min(0.5, (ratio - 1) * 0.2) 
+      : Math.max(-0.3, (1 - 1/ratio) * -0.3);
+    return Math.max(0, Math.min(1, sumScore + ratioScore + 0.3));
+  }
+
+  function rScoreToLetter(r) {
+    // Convert R score to letter grade (S~F)
+    if (r >= 0.80) return 'S';
+    if (r >= 0.70) return 'A';
+    if (r >= 0.60) return 'B';
+    if (r >= 0.50) return 'C';
+    if (r >= 0.40) return 'D';
+    if (r >= 0.30) return 'E';
+    return 'F';
+  }
+
+  function calculateNBZoneBias(nbBlue, nbOrange, nbBlueCount, nbOrangeCount, nbLastZone) {
+    // Calculate bias multiplier based on N/B zone distribution
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const nbBlueRatio = Number.isFinite(nbBlue) ? clamp01(nbBlue) : 0.5;
+    const nbOrangeRatio = Number.isFinite(nbOrange) ? clamp01(nbOrange) : (1 - nbBlueRatio);
+    
+    const ratioBias = 1 + (nbOrangeRatio - nbBlueRatio) * 0.6;
+    
+    const totalCnt = (Number.isFinite(nbBlueCount) ? nbBlueCount : 0) + (Number.isFinite(nbOrangeCount) ? nbOrangeCount : 0);
+    const countBias = totalCnt > 0 ? 1 + ((nbOrangeCount - nbBlueCount) / totalCnt) * 0.4 : 1;
+    
+    const lastZoneBias = nbLastZone === 'ORANGE' ? 1.1 : (nbLastZone === 'BLUE' ? 0.9 : 1);
+    
+    const rawBias = ratioBias * countBias * lastZoneBias;
+    return Math.max(0.5, Math.min(1.5, rawBias));
+  }
+
+  function calculateCardPts(letters, sign, bias) {
+    // Calculate avgPts from letter grades and sign
+    const letterPts = { F:0, E:1, D:2, C:3, B:4, A:5, S:6 };
+    const avgPtsRaw = letters.reduce((sum, ch) => sum + (letterPts[ch] || 0), 0) / letters.length;
+    const signAdjustment = sign === '+' ? 0.25 : (sign === '-' ? -0.25 : 0);
+    return (avgPtsRaw + signAdjustment) * bias;
+  }
+
+  function getLeagueName(avgPts) {
+    // Determine league based on avgPts
+    if (avgPts < 2.0) return '브론즈';
+    if (avgPts < 3.0) return '실버';
+    if (avgPts < 4.0) return '골드';
+    if (avgPts < 5.0) return '플래티넘';
+    if (avgPts < 5.75) return '다이아';
+    return '첼린저';
+  }
+
   function computeCardCodeFS(params) {
     const { priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin, nbBlue, nbOrange, nbBlueCount, nbOrangeCount, nbLastZone } = params || {};
     if ([priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin].some(v => v == null || isNaN(Number(v)))) {
@@ -137,93 +270,55 @@ const FlowDashboard = (() => {
     const aMax = toNum(amountMax);
     const aMin = toNum(amountMin);
 
-    // MAX + MIN 합계 기반 r값 계산 (0~1)
-    // N/B 최대값 = 99, 따라서 MAX + MIN 최대값 = 99 × 2 = 198
-    const calcR = (max, min) => {
-      const sum = max + min;
-      const ratio = max > 0 && min > 0 ? max / min : 1;
-      
-      // 합계 점수 (0~0.5): MAX + MIN 합계가 클수록 높음 (최대 198 기준)
-      const sumScore = Math.min(0.5, sum / 198 * 0.5);
-      
-      // 비율 보너스 (0~0.5): MAX > MIN이면 높음, MAX < MIN이면 낮음
-      const ratioScore = ratio > 1 
-        ? Math.min(0.5, (ratio - 1) * 0.2)    // MAX > MIN: 보너스
-        : Math.max(-0.3, (1 - 1/ratio) * -0.3); // MAX < MIN: 페널티
-      
-      return Math.max(0, Math.min(1, sumScore + ratioScore + 0.3)); // 기본 0.3 더해서 최소값 확보
-    };
-
-    const rPrice = calcR(pMax, pMin);
-    const rVol = calcR(vMax, vMin);
-    const rAmt = calcR(aMax, aMin);
+    // Calculate R scores for each metric
+    const rPrice = calculateRScore(pMax, pMin);
+    const rVol = calculateRScore(vMax, vMin);
+    const rAmt = calculateRScore(aMax, aMin);
 
     const spreadPrice = Math.abs(pMax - pMin);
     const spreadVol = Math.abs(vMax - vMin);
     const spreadAmt = Math.abs(aMax - aMin);
 
-    const diffPrice = spreadPrice;
-    const diffVol = spreadVol;
-    const diffAmt = spreadAmt;
+    // Convert R scores to letter grades
+    const pL = rScoreToLetter(rPrice);
+    const vL = rScoreToLetter(rVol);
+    const aL = rScoreToLetter(rAmt);
 
-    const rToLetter = (r) => {
-      if (r >= 0.80) return 'S';
-      if (r >= 0.70) return 'A';
-      if (r >= 0.60) return 'B';
-      if (r >= 0.50) return 'C';
-      if (r >= 0.40) return 'D';
-      if (r >= 0.30) return 'E';
-      return 'F';
-    };
+    const avgR = (rPrice + rVol + rAmt) / 3;
 
-    const pL = rToLetter(rPrice);
-    const vL = rToLetter(rVol);
-    const aL = rToLetter(rAmt);
-
-    const avgR = (rPrice + rVol + rAmt) / 3; // 0~1
-
-    // N/B bias: 오렌지 많으면 ↑, 블루 많으면 ↓, 최근 존 가중 포함
+    // Calculate N/B zone bias and extract intermediate values
     const clamp01 = (v) => Math.max(0, Math.min(1, v));
     const nbBlueRatio = Number.isFinite(nbBlue) ? clamp01(nbBlue) : 0.5;
     const nbOrangeRatio = Number.isFinite(nbOrange) ? clamp01(nbOrange) : (1 - nbBlueRatio);
-    const ratioBias = 1 + (nbOrangeRatio - nbBlueRatio) * 0.6; // -0.6~+0.6
-
-    const totalCnt = (Number.isFinite(nbBlueCount) ? nbBlueCount : 0) + (Number.isFinite(nbOrangeCount) ? nbOrangeCount : 0);
-    const countBias = totalCnt > 0 ? 1 + ((nbOrangeCount - nbBlueCount) / totalCnt) * 0.4 : 1; // -0.4~+0.4
-
-    const lastZoneBias = nbLastZone === 'ORANGE' ? 1.1 : (nbLastZone === 'BLUE' ? 0.9 : 1);
-
-    const rawBias = ratioBias * countBias * lastZoneBias;
-    const bias = Math.max(0.5, Math.min(1.5, rawBias));
+    const bias = calculateNBZoneBias(nbBlue, nbOrange, nbBlueCount, nbOrangeCount, nbLastZone);
     const biasedAvgR = Math.max(0, Math.min(1, avgR * bias));
+    
+    // Extract rawBias for return value
+    const ratioBias = 1 + (nbOrangeRatio - nbBlueRatio) * 0.6;
+    const totalCnt = (Number.isFinite(nbBlueCount) ? nbBlueCount : 0) + (Number.isFinite(nbOrangeCount) ? nbOrangeCount : 0);
+    const countBias = totalCnt > 0 ? 1 + ((nbOrangeCount - nbBlueCount) / totalCnt) * 0.4 : 1;
+    const lastZoneBias = nbLastZone === 'ORANGE' ? 1.1 : (nbLastZone === 'BLUE' ? 0.9 : 1);
+    const rawBias = ratioBias * countBias * lastZoneBias;
 
+    // Calculate points and signs
     const sign = biasedAvgR >= 0.65 ? '+' : (biasedAvgR <= 0.45 ? '-' : '');
     const code = `${pL}${vL}${aL}${sign}`;
-
-    const letterPts = { F:0, E:1, D:2, C:3, B:4, A:5, S:6 };
-    const avgPtsRaw = (letterPts[pL] + letterPts[vL] + letterPts[aL]) / 3;
-    const avgPts = (avgPtsRaw + (sign === '+' ? 0.25 : (sign === '-' ? -0.25 : 0))) * bias;
-
-    const league = (() => {
-      if (avgPts < 2.0) return '브론즈';
-      if (avgPts < 3.0) return '실버';
-      if (avgPts < 4.0) return '골드';
-      if (avgPts < 5.0) return '플래티넘';
-      if (avgPts < 5.75) return '다이아';
-      return '첼린저';
-    })();
-
+    
+    const avgPts = calculateCardPts([pL, vL, aL], sign, bias);
+    const league = getLeagueName(avgPts);
     const group = avgPts < 2.5 ? 'EASY' : (avgPts < 4.5 ? 'NORMAL' : 'HARD');
+    // Determine super status
     const countAS = [pL, vL, aL].filter(ch => ch === 'A' || ch === 'S').length;
     const countS = [pL, vL, aL].filter(ch => ch === 'S').length;
     const isSuper = (countS >= 2) || (avgPts >= 5.5) || (sign === '+' && countAS >= 2);
 
-    // Magnitude boost: higher absolute levels -> higher enhancement (log scaled)
-    const meanMax = (Number(priceMax) + Number(volumeMax) + Number(amountMax)) / 3;
+    // Calculate enhancement value based on magnitude
+    const meanMax = (pMax + vMax + aMax) / 3;
     const magnitudeBoost = Math.log10(Math.max(1, meanMax) + 1);
     const magnitudeFactor = 0.7 + 0.3 * Math.min(2, magnitudeBoost) / 2;
-
     const enhancement = Math.min(99, Math.max(1, Math.round((biasedAvgR * 100) * magnitudeFactor)));
+    
+    // Determine color based on sign
     const color = sign === '+' ? '#00d1ff' : (sign === '-' ? '#ffb703' : '#e6eefc');
 
     return {
@@ -231,12 +326,13 @@ const FlowDashboard = (() => {
       league,
       group,
       super: isSuper,
-      avgDiff: (diffPrice + diffVol + diffAmt) / 3,
+      avgDiff: (spreadPrice + spreadVol + spreadAmt) / 3,
+      avgPts: avgPts,
       color,
       enhancement,
       // Raw values to feed AI
       priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin,
-      diffPrice, diffVol, diffAmt,
+      diffPrice: spreadPrice, diffVol: spreadVol, diffAmt: spreadAmt,
       rPrice, rVol, rAmt,
       magnitudeBoost,
       magnitudeFactor,
@@ -453,71 +549,104 @@ const FlowDashboard = (() => {
     console.log(`✅ Mini zone chart rendered: ${zones.length} total, ${orangeCount} orange, each width: ${eachWidth}%`);
   }
 
+  // ===== CHART UPDATE HELPERS =====
+  function prepareWinGradeTrendData(entries, maxPoints = 60) {
+    // Transform entries to chart-ready format
+    const list = Array.isArray(entries) ? entries.slice(0, maxPoints) : [];
+    if (list.length === 0) return null;
+    
+    const ordered = list.slice().reverse();
+    const labels = [];
+    const data = [];
+    
+    ordered.forEach(item => {
+      const ts = item.ts ? new Date(item.ts) : new Date();
+      labels.push(ts.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
+      const val = Number(item.avgPts != null ? item.avgPts : 0);
+      data.push(Number(val.toFixed(2)));
+    });
+    
+    return { labels, data, latestValue: data.length ? data[data.length - 1] : 0 };
+  }
+
+  function createWinGradeTrendChart(ctx, labels, data) {
+    // Create new Chart.js instance for trend
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '카드 등급 점수',
+          data,
+          borderColor: '#ffd700',
+          backgroundColor: 'rgba(255,215,0,0.15)',
+          tension: 0.25,
+          fill: true,
+          pointRadius: 0,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: 0,
+            max: 7,
+            ticks: { stepSize: 1 }
+          }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
   function updateWinGradeTrendChart(entries) {
     try {
-      const list = Array.isArray(entries) ? entries.slice(0, 60) : [];
-      const ordered = list.slice().reverse();
-      const labels = [];
-      const data = [];
-      ordered.forEach(item => {
-        const ts = item.ts ? new Date(item.ts) : new Date();
-        labels.push(ts.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
-        const val = Number(item.avgPts != null ? item.avgPts : 0);
-        data.push(Number(val.toFixed(2)));
-      });
+      const trendData = prepareWinGradeTrendData(entries);
+      if (!trendData) {
+        console.warn('⚠️ No win grade trend data');
+        return;
+      }
+      
+      const { labels, data, latestValue } = trendData;
 
+      // Update label
       const labelEl = document.getElementById('winGradeTrendLabel');
       if (labelEl) {
-        labelEl.textContent = data.length ? `${data[data.length - 1].toFixed(2)} pts` : '-';
+        labelEl.textContent = `${latestValue.toFixed(2)} pts`;
       }
 
+      // Get canvas element
       const ctx = document.getElementById('winGradeTrendChart');
-      if (!ctx || typeof Chart === 'undefined') return;
+      if (!ctx) {
+        console.error('❌ winGradeTrendChart element not found');
+        return;
+      }
+      
+      if (typeof Chart === 'undefined') {
+        console.error('❌ Chart.js not loaded');
+        return;
+      }
 
+      // Update or create chart
       if (winGradeTrendChart) {
         winGradeTrendChart.data.labels = labels;
         winGradeTrendChart.data.datasets[0].data = data;
         winGradeTrendChart.update();
+        console.log('✅ Win grade trend chart updated:', data.length, 'points');
         return;
       }
 
-      winGradeTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: '카드 등급 점수',
-            data,
-            borderColor: '#ffd700',
-            backgroundColor: 'rgba(255,215,0,0.15)',
-            tension: 0.25,
-            fill: true,
-            pointRadius: 0,
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              min: 0,
-              max: 7,
-              ticks: { color: '#d9e2f3', font: { size: 10 } },
-              grid: { color: 'rgba(255,255,255,0.08)' }
-            },
-            x: {
-              ticks: { color: '#9aa8c2', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
-              grid: { display: false }
-            }
-          },
-          plugins: { legend: { display: false }, tooltip: { enabled: true } }
-        }
-      });
-    } catch (e) {
-      console.warn('win grade trend error:', e?.message);
+      winGradeTrendChart = createWinGradeTrendChart(ctx, labels, data);
+      console.log('✅ Win grade trend chart created:', data.length, 'points');
+    } catch (err) {
+      console.error('❌ Failed to update win grade trend chart:', err);
     }
   }
+
+  // ===== END CHART HELPERS =====
+
 
   // Small sparkline for win snapshots
   function createWinPriceChart(canvasId, prices, color) {
@@ -693,9 +822,12 @@ const FlowDashboard = (() => {
 
   function addCurrentWinSnapshot(interval) {
     try {
-      const cc = ccCurrentData;
-      const cr = ccCurrentRating;
-      if (!cc || !cr) return;
+      const cc = ccCurrentData || window.ccCurrentData;
+      const cr = ccCurrentRating || window.ccCurrentRating;
+      if (!cc || !cr) {
+        console.log('⏭️ Skipping snapshot: missing cc or cr', {cc: !!cc, cr: !!cr});
+        return;
+      }
 
       const tf = interval || state.selectedInterval || cc.interval || 'minute10';
       const nowIso = new Date().toISOString();
@@ -709,7 +841,10 @@ const FlowDashboard = (() => {
         const nbStats = state.nbStats || {};
         zone = nbStats.zone || state.currentZone || window.ccCurrentZone || (state.mlStats && state.mlStats.mlZone) || 'NONE';
       }
-      if (!zone || zone === 'NONE') return;
+      if (!zone || zone === 'NONE') {
+        console.log('⏭️ Skipping snapshot: no zone detected');
+        return;
+      }
 
       const last = winClientHistory[0];
       if (last) {
@@ -746,7 +881,7 @@ const FlowDashboard = (() => {
       };
 
       winClientHistory.unshift(entry);
-      winClientHistory = winClientHistory.slice(0, 200);
+      winClientHistory = winClientHistory.slice(0, 24); // 메모리 누수 방지: 최근 24개만 유지
       window.winClientHistory = winClientHistory;
 
       // Train/update script-based AI on new snapshot
@@ -852,7 +987,7 @@ const FlowDashboard = (() => {
 
     function onSnapshotAdded() {
       try {
-        const snaps = (window.winClientHistory || []).slice(0, 100);
+        const snaps = (window.winClientHistory || []).slice(0, 24); // 최근 24개 스냅샷만 훈련
         trainFromSnapshots(snaps, 20, 0.08);
       } catch(_) {}
     }
@@ -1951,13 +2086,17 @@ const FlowDashboard = (() => {
             const lastTime = nbWaveData[nbWaveData.length - 1].time;
             const timeStep = nbWaveData[1].time - nbWaveData[0].time;
             
+            // 최근 30개의 NB Wave 값 추출
+            const recentNbSequence = nbWaveData.slice(-30).map(d => d.value);
+            
             // LSTM V3 API 호출 (딥러닝 예측)
             const response = await fetch('/api/ml/rating/v3/predict', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 interval: interval,
-                sequence_count: 30
+                sequence_count: 30,
+                nb_sequence: recentNbSequence
               })
             });
             
@@ -2247,7 +2386,8 @@ const FlowDashboard = (() => {
         console.log('🔵 ML API 응답 상태:', resp.status, resp.statusText);
         const data = await resp.json();
         console.log('🔵 ML API 응답 데이터:', data);
-        console.log('🔵 ML API ml_trust:', data.ml_trust, '| zone:', data.zone, '| insight:', data.insight);
+        const insight = data.insight || {};
+        console.log('🔵 ML API insight:', insight.pct_blue, '/', insight.pct_orange, '| zone:', insight.zone, '| action:', data.action);
         return data;
       } catch (error) {
         console.error('🔴 ML API 호출 오류:', error);
@@ -3821,6 +3961,20 @@ const FlowDashboard = (() => {
 // Expose globally for inline handlers and external calls
 window.FlowDashboard = FlowDashboard;
 
+// ===== STATE MANAGER EXPOSED =====
+// 페이지 새로고침 전에 상태 저장 (StateManager가 모든 것을 처리)
+window.addEventListener('beforeunload', function() {
+  console.log('💾 Saving all state before page unload via StateManager...');
+  stateManager.save(state);
+});
+
+// 콘솔에서 사용 가능: FlowDashboard.saveState(), FlowDashboard.loadState() 등
+FlowDashboard.saveState = () => stateManager.save(state);
+FlowDashboard.loadState = () => stateManager.load();
+FlowDashboard.restoreState = () => stateManager.restore(state);
+FlowDashboard.clearState = () => stateManager.clear();
+FlowDashboard.getStateSize = () => stateManager.getSize();
+
 // ============================================================================
 // Step 7: 자산 조회
 // ============================================================================
@@ -3908,11 +4062,12 @@ async function loadBuyCards8() {
           }
         } catch (e) {
           console.error('Failed to load buy cards:', e);
+          // localStorage에서 스냅샷 복원 시도
           try {
-            const cachedBuyOrders = localStorage.getItem('buyOrdersCache');
-            if (cachedBuyOrders) {
-              buyOrders = JSON.parse(cachedBuyOrders);
-              console.log('💾 캐시에서 매수 카드 복원:', buyOrders.length, '개');
+            const cachedSnapshot = localStorage.getItem('buyCardsSnapshot');
+            if (cachedSnapshot) {
+              buyOrders = JSON.parse(cachedSnapshot);
+              console.log('💾 localStorage에서 매수 카드 복원:', buyOrders.length, '개');
             }
           } catch (_) {}
         }
@@ -4312,6 +4467,116 @@ async function loadNbverseCardFromBuyOrders(buyOrders, interval) {
   return null;
 }
 
+// ============================================================================
+// 헬퍼: 최신가 추출
+// ============================================================================
+// ============================================================================
+// BUY-CARD RENDERING HELPERS (Refactored)
+// ============================================================================
+
+function getLatestPrice(fallbackOrders = []) {
+  // Get latest price from candleDataCache or fallback to order price
+  try {
+    const lastCandle = (window.candleDataCache || []).slice(-1)[0];
+    const price = Number(lastCandle?.close || lastCandle?.value || 0);
+    if (price > 0) return price;
+  } catch (_) {}
+  
+  if (fallbackOrders.length > 0) {
+    return Number(fallbackOrders[0]?.price || 0) || 0;
+  }
+  return 0;
+}
+
+
+// ============================================================================
+// Card Rating Extraction Helper
+// ============================================================================
+function extractCardRating(order) {
+  // Extract card rating data from order object with nested fallbacks
+  const cardRatingObj = (
+    order.card_rating || order.cardRating ||
+    (order.nbverse_data && (order.nbverse_data.card_rating || order.nbverse_data.card?.card_rating))
+  );
+  
+  let rating = '-';
+  let ratingScore = '-';
+  let ratingDetail = '-';
+  
+  if (cardRatingObj && typeof cardRatingObj === 'object') {
+    rating = cardRatingObj.code || cardRatingObj.league || rating;
+    
+    if (cardRatingObj.enhancement !== undefined && cardRatingObj.enhancement !== null) {
+      ratingScore = String(cardRatingObj.enhancement);
+    } else if (cardRatingObj.bias !== undefined && cardRatingObj.bias !== null) {
+      ratingScore = `${(cardRatingObj.bias * 100).toFixed(1)}%`;
+    } else if (cardRatingObj.magnitudeBoost !== undefined && cardRatingObj.magnitudeBoost !== null) {
+      ratingScore = cardRatingObj.magnitudeBoost.toFixed(1);
+    }
+    
+    if (cardRatingObj.league) {
+      ratingDetail = cardRatingObj.league;
+      if (cardRatingObj.group) ratingDetail += ` ${cardRatingObj.group}`;
+    }
+  } else if (order.rating_score || order.ratingScore) {
+    ratingScore = order.rating_score || order.ratingScore;
+    rating = order.card_rating || order.cardRating || rating;
+  }
+  
+  return { rating, ratingScore, ratingDetail };
+}
+
+// ============================================================================
+// 헬퍼: Zone 추출 (BLUE/ORANGE)
+// ============================================================================
+function extractZone(order) {
+  let zone = order.nb_zone?.zone || order.nb_zone || order.insight?.zone || '';
+  if (!zone && order.insight?.zone_flag) {
+    zone = order.insight.zone_flag > 0 ? 'BLUE' : 'ORANGE';
+  }
+  return zone;
+}
+
+// ============================================================================
+// 헬퍼: 강화 수치 부호 추가
+// ============================================================================
+function addEnhancementSign(ratingScore, zone) {
+  const parsedScore = Number(ratingScore);
+  if (Number.isNaN(parsedScore) || !zone) return ratingScore;
+  
+  const sign = zone.toUpperCase() === 'BLUE' ? '+' : (zone.toUpperCase() === 'ORANGE' ? '-' : '');
+  return `${sign}${parsedScore}`;
+}
+
+// ============================================================================
+// 헬퍼: 손익 계산 (0.1% 수수료 포함)
+// ============================================================================
+function calculatePnL(buyPrice, size, currentPrice) {
+  const UPBIT_FEE = 0.001;
+  const cost = buyPrice * size;
+  const buyFee = cost * UPBIT_FEE;
+  const totalCost = cost + buyFee;
+  
+  const currentValue = currentPrice * size;
+  const sellFee = currentValue * UPBIT_FEE;
+  const totalSellValue = currentValue - sellFee;
+  
+  const pnl = totalSellValue - totalCost;
+  const pnlRate = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+  
+  return {
+    pnl,
+    pnlRate,
+    pnlColor: pnl >= 0 ? '#0ecb81' : '#f6465d',
+    pnlSign: pnl > 0 ? '+' : '',
+    lossAmount: pnl < 0 ? pnl : 0,
+    lossRate: pnl < 0 ? pnlRate : 0
+  };
+}
+
+// ============================================================================
+// 메인: 매수 카드 렌더링
+// ============================================================================
 async function renderBuyOrderList(orders, interval) {
   const container = document.getElementById('buyOrderList');
   if (!container) return;
@@ -4325,18 +4590,7 @@ async function renderBuyOrderList(orders, interval) {
   const tfMap = { minute1: '1m', minute3: '3m', minute5: '5m', minute10: '10m', minute15: '15m', minute30: '30m', minute60: '1h', day: '1D' };
   const tfLabel = tfMap[tfi] || tfi;
 
-  // 최신가(현재가) 추출: 차트 캐시 → 첫 매수 가격
-  let latestPrice = (() => {
-    let p = 0;
-    try {
-      const lastCandle = (window.candleDataCache || []).slice(-1)[0];
-      p = Number(lastCandle?.close || lastCandle?.value || 0) || 0;
-    } catch (_) { p = 0; }
-    if (!p && orders.length > 0) {
-      p = Number(orders[0]?.price || 0) || 0;
-    }
-    return p;
-  })();
+  const latestPrice = getLatestPrice(orders);
 
   // 각 카드의 NBverse 정보를 조회하여 표시 (최근 10개만 유지)
   const cardsWithNbverse = await Promise.all(
@@ -4348,57 +4602,35 @@ async function renderBuyOrderList(orders, interval) {
     })
   );
 
+  // localStorage에 스냅샷 저장 (새로고침 시 복원용)
+  try {
+    const snapshotData = cardsWithNbverse.map(c => c.order);
+    localStorage.setItem('buyCardsSnapshot', JSON.stringify(snapshotData));
+    localStorage.setItem('buyCardsSnapshotTime', new Date().toISOString());
+  } catch (e) {
+    console.warn('Failed to save snapshot to localStorage:', e);
+  }
+
   container.innerHTML = cardsWithNbverse.map(({ order: o, index: idx, nbverseInfo }) => {
     const price = Number(o.price || 0);
     const size = Number(o.size || 0);
     const totalKrw = (price * size).toFixed(0);
     const time = o.time ? new Date(o.time).toLocaleString('ko-KR') : (o.ts ? new Date(o.ts).toLocaleString('ko-KR') : '-');
     
-    // N/B 데이터 (조회된 NBverse 정보 우선 사용)
+    // N/B 데이터
     const nbPriceOld = o.nb_price || nbverseInfo?.nbPrice || o.nbPrice || '-';
     const nbVolume = o.nb_volume || nbverseInfo?.currentVolume || o.nbVolume || '-';
     const nbInterval = o.nbverse_interval || nbverseInfo?.interval || tfLabel;
     
-    // 카드 등급: 우선 card_rating 객체의 code/league/enhancement 사용, 없으면 NB값으로 산정
-    let rating = '-';
-    let ratingScore = '-';
-    let ratingDetail = '-';
+    // 카드 등급 추출
+    let { rating, ratingScore, ratingDetail } = extractCardRating(o);
     let mlRating = '';
 
-    const cardRatingObj = (
-      o.card_rating || o.cardRating ||
-      (o.nbverse_data && (o.nbverse_data.card_rating || o.nbverse_data.card?.card_rating))
-    );
-    if (cardRatingObj && typeof cardRatingObj === 'object') {
-      rating = cardRatingObj.code || cardRatingObj.league || rating;
-      if (cardRatingObj.enhancement !== undefined && cardRatingObj.enhancement !== null) {
-        ratingScore = String(cardRatingObj.enhancement);
-      } else if (cardRatingObj.bias !== undefined && cardRatingObj.bias !== null) {
-        ratingScore = `${(cardRatingObj.bias * 100).toFixed(1)}%`;
-      } else if (cardRatingObj.magnitudeBoost !== undefined && cardRatingObj.magnitudeBoost !== null) {
-        ratingScore = cardRatingObj.magnitudeBoost.toFixed(1);
-      }
-      // 리그/그룹 정보
-      if (cardRatingObj.league) {
-        ratingDetail = cardRatingObj.league;
-        if (cardRatingObj.group) ratingDetail += ` ${cardRatingObj.group}`;
-      }
-    } else if (o.rating_score || o.ratingScore) {
-      ratingScore = o.rating_score || o.ratingScore;
-      rating = o.card_rating || o.cardRating || rating;
-    }
-
-    // 강화 수치 부호: BLUE(+1) → +, ORANGE(-1) → -
-    // 우선순위: 현재 zone > zone_flag > nb_zone
-    let zoneForSign = o.nb_zone?.zone || o.nb_zone || o.insight?.zone || '';
-    if (!zoneForSign && o.insight?.zone_flag) {
-      zoneForSign = o.insight.zone_flag > 0 ? 'BLUE' : 'ORANGE';
-    }
-    const parsedScore = Number(ratingScore);
-    if (!Number.isNaN(parsedScore) && typeof zoneForSign === 'string') {
-      const sign = zoneForSign.toUpperCase() === 'BLUE' ? '+' : (zoneForSign.toUpperCase() === 'ORANGE' ? '-' : '');
-      ratingScore = `${sign}${parsedScore}`;
-    }
+    // Zone 추출
+    const zoneForSign = extractZone(o);
+    
+    // 강화 수치 부호 추가
+    ratingScore = addEnhancementSign(ratingScore, zoneForSign);
 
     // ML 등급 표시 (등급이 "-"가 아니고 유효한 경우만)
     if (o.mlGrade && o.mlGrade !== '-' && o.mlGrade !== '' && typeof zoneForSign === 'string') {
@@ -4429,21 +4661,8 @@ async function renderBuyOrderList(orders, interval) {
     const nbZone = '-';
     const mlTrust = '-';
 
-    // 손익 계산 (0.1% 수수료 포함)
-    const cost = price * size;
-    const buyFee = cost * 0.001; // 매수 수수료 0.1%
-    const totalCost = cost + buyFee;
-    
-    const currentValue = latestPrice * size;
-    const sellFee = currentValue * 0.001; // 매도 수수료 0.1%
-    const totalSellValue = currentValue - sellFee;
-    
-    const pnl = totalSellValue - totalCost;
-    const pnlRate = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
-    const pnlColor = pnl >= 0 ? '#0ecb81' : '#f6465d';
-    const pnlSign = pnl > 0 ? '+' : '';
-    const lossAmount = pnl < 0 ? pnl : 0;
-    const lossRate = pnl < 0 ? pnlRate : 0;
+    // 손익 계산
+    const { pnl, pnlRate, pnlColor, pnlSign, lossAmount, lossRate } = calculatePnL(price, size, latestPrice);
     const lossColor = lossAmount < 0 ? '#f6465d' : '#9aa8c2';
 
     // 추가 N/B 메트릭 (Step 2와 동일하게 nb 객체에서 추출)
@@ -4886,6 +5105,13 @@ async function executeSellForCard(cardIdx, price, size, market) {
 // Initialize on DOM Ready
 // ============================================================================
 $(document).ready(function() {
+  // 1단계: localStorage에서 상태 복원
+  const savedState = stateManager.load();
+  if (savedState) {
+    console.log('📥 이전 상태 복원 중...');
+    Object.assign(state, savedState);
+  }
+
   FlowDashboard.init();
   FlowDashboard.startMemoryMonitoring(); // Start memory monitoring to prevent leaks
   
