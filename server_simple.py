@@ -18,7 +18,7 @@ import numpy as np
 try:
     from main import load_config, get_candles
     from trade import Trader, TradeConfig
-    from rating_ml import get_rating_ml
+    from helpers.rating_ml import get_rating_ml
     from helpers.candles import compute_r_from_ohlcv
     from helpers.nbverse import save_nbverse_card, _load_nbverse_snapshot
 except ImportError as e:

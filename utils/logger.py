@@ -51,9 +51,15 @@ def setup_logger(name: str = '8bit_bot', log_dir: str = 'logs', level: str = Non
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
+    # 로그 파일명 결정 (name에 따라 다른 파일)
+    if name == 'ml_v2':
+        log_filename = 'ml_v2.log'
+    else:
+        log_filename = 'bot.log'
+    
     # 파일 핸들러 (회전 로그)
     file_handler = RotatingFileHandler(
-        log_path / 'bot.log',
+        log_path / log_filename,
         maxBytes=10 * 1024 * 1024,  # 10MB
         backupCount=5,
         encoding='utf-8'
@@ -68,6 +74,12 @@ def setup_logger(name: str = '8bit_bot', log_dir: str = 'logs', level: str = Non
     
     # 핸들러 추가
     logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    # 즉시 flush 설정
+    logger.propagate = False
+    
+    return logger
     logger.addHandler(console_handler)
     
     return logger

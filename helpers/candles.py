@@ -51,6 +51,9 @@ def compute_r_from_ohlcv(df: pd.DataFrame, window: int) -> pd.Series:
 
 def compute_nb_stats(df: pd.DataFrame, window: int) -> dict:
     """N/B 통계 계산"""
+    # 순환 import 방지를 위한 지연 import
+    from helpers.features import BIT_MAX_NB, BIT_MIN_NB
+    
     rng_seed = 5.5
     
     out = {}
@@ -60,8 +63,8 @@ def compute_nb_stats(df: pd.DataFrame, window: int) -> dict:
         price_nb = compute_nb_values(price_series, window)
         out['price'] = {
             'values': price_nb,
-            'max': float(max(price_nb)) if price_nb else None,
-            'min': float(min(price_nb)) if price_nb else None,
+            'max': BIT_MAX_NB(price_nb, rng_seed) if price_nb else None,
+            'min': BIT_MIN_NB(price_nb, rng_seed) if price_nb else None,
         }
     except Exception:
         out['price'] = {'values': [], 'max': None, 'min': None}
@@ -73,8 +76,8 @@ def compute_nb_stats(df: pd.DataFrame, window: int) -> dict:
             vol_nb = compute_nb_values(vol_series, window)
             out['volume'] = {
                 'values': vol_nb,
-                'max': float(max(vol_nb)) if vol_nb else None,
-                'min': float(min(vol_nb)) if vol_nb else None,
+                'max': BIT_MAX_NB(vol_nb, rng_seed) if vol_nb else None,
+                'min': BIT_MIN_NB(vol_nb, rng_seed) if vol_nb else None,
             }
         else:
             out['volume'] = {'values': [], 'max': None, 'min': None}
@@ -88,8 +91,8 @@ def compute_nb_stats(df: pd.DataFrame, window: int) -> dict:
             turnover_nb = compute_nb_values(turnover_series, window)
             out['turnover'] = {
                 'values': turnover_nb,
-                'max': float(max(turnover_nb)) if turnover_nb else None,
-                'min': float(min(turnover_nb)) if turnover_nb else None,
+                'max': BIT_MAX_NB(turnover_nb, rng_seed) if turnover_nb else None,
+                'min': BIT_MIN_NB(turnover_nb, rng_seed) if turnover_nb else None,
             }
         else:
             out['turnover'] = {'values': [], 'max': None, 'min': None}

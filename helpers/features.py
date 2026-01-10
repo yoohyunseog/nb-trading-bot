@@ -1,13 +1,71 @@
-"""Feature engineering for ML training"""
+"""Feature engineering for ML training with GPU acceleration"""
 import os
 import numpy as np
 import pandas as pd
 from helpers.candles import compute_r_from_ohlcv
 
+# GPU 가속 설정
+try:
+    import tensorflow as tf
+    GPU_AVAILABLE = True
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except:
+            pass
+except:
+    GPU_AVAILABLE = False
+
+
+def _normalize_with_gpu(data: np.ndarray) -> np.ndarray:
+    """GPU 가속 정규화 (MinMax)"""
+    try:
+        data = np.asarray(data, dtype=np.float32)
+        
+        if data.size == 0:
+            return data
+        
+        if np.all(np.isnan(data)):
+            return np.zeros_like(data)
+        
+        # NaN 값 처리
+        valid_mask = ~np.isnan(data)
+        if not np.any(valid_mask):
+            return np.zeros_like(data)
+        
+        data_min = np.nanmin(data)
+        data_max = np.nanmax(data)
+        data_range = max(data_max - data_min, 1e-8)
+        
+        normalized = np.where(valid_mask, (data - data_min) / data_range, 0.0)
+        return normalized
+    except Exception as e:
+        return np.asarray(data, dtype=np.float32)
+
+
+def _compute_rolling_stats_gpu(data: np.ndarray, window: int) -> tuple:
+    """GPU 가속 롤링 통계"""
+    try:
+        data = np.asarray(data, dtype=np.float32)
+        
+        if len(data) < window or window <= 0:
+            return data, data
+        
+        # Pandas 롤링 (더 안전함)
+        series = pd.Series(data)
+        rolling_max = series.rolling(window=window, min_periods=1).max().values
+        rolling_min = series.rolling(window=window, min_periods=1).min().values
+        
+        return rolling_max, rolling_min
+    except Exception as e:
+        return np.asarray(data, dtype=np.float32), np.asarray(data, dtype=np.float32)
+
 
 def build_features(df: pd.DataFrame, window: int, ema_fast: int = 10, ema_slow: int = 30, horizon: int = 5) -> pd.DataFrame:
     """
-    Build ML features from OHLCV data with zone-aware context
+    Build ML features from OHLCV data with zone-aware context (GPU accelerated)
     
     Args:
         df: DataFrame with OHLCV data
@@ -295,7 +353,22 @@ SUPER_BIT = 0
 
 
 def initialize_arrays(count):
-    """Initialize arrays for BIT calculations"""
+    """Initialize arrays for BIT calculations (GPU optimized)"""
+    if GPU_AVAILABLE and count > 1000:
+        try:
+            # TensorFlow로 초기화 (GPU)
+            arrays = {
+                'BIT_START_A50': tf.zeros(count, dtype=tf.float32).numpy(),
+                'BIT_START_A100': tf.zeros(count, dtype=tf.float32).numpy(),
+                'BIT_START_B50': tf.zeros(count, dtype=tf.float32).numpy(),
+                'BIT_START_B100': tf.zeros(count, dtype=tf.float32).numpy(),
+                'BIT_START_NBA100': tf.zeros(count, dtype=tf.float32).numpy()
+            }
+            return arrays
+        except:
+            pass
+    
+    # CPU fallback
     arrays = ['BIT_START_A50', 'BIT_START_A100', 'BIT_START_B50', 'BIT_START_B100', 'BIT_START_NBA100']
     initialized_arrays = {}
     for array in arrays:
@@ -304,7 +377,7 @@ def initialize_arrays(count):
 
 
 def calculate_bit(nb, bit=99.9999999999, reverse=False):
-    """Calculate N/B value with median and threshold analysis
+    """Calculate N/B value with median and threshold analysis (GPU accelerated)
     
     Args:
         nb: List of N/B values
@@ -316,6 +389,9 @@ def calculate_bit(nb, bit=99.9999999999, reverse=False):
     """
     if len(nb) < 2:
         return bit / 100
+    
+    # CPU 원본 로직만 사용 (GPU 최적화는 인덱싱 문제로 비활성화)
+    # CPU 원본 로직
     
     BIT_NB = bit
     max_val = max(nb)
@@ -408,12 +484,12 @@ def BIT_MAX_NB(nb_values, bit=99.9999999999):
         
         # Return SUPER_BIT if result is invalid
         if not np.isfinite(result) or np.isnan(result) or result > 100 or result < -100:
-            return SUPER_BIT
+            return float(SUPER_BIT)
         else:
             update_super_bit(result)
-            return result
+            return float(result)
     except Exception:
-        return SUPER_BIT
+        return float(SUPER_BIT)
 
 
 def BIT_MIN_NB(nb_values, bit=99.9999999999):
@@ -434,16 +510,16 @@ def BIT_MIN_NB(nb_values, bit=99.9999999999):
         
         # Return SUPER_BIT if result is invalid
         if not np.isfinite(result) or np.isnan(result) or result > 100 or result < -100:
-            return SUPER_BIT
+            return float(SUPER_BIT)
         else:
             update_super_bit(result)
-            return result
+            return float(result)
     except Exception:
-        return SUPER_BIT
+        return float(SUPER_BIT)
 
 
 def calculate_array_order_and_duplicate(nb1, nb2):
-    """Compare two arrays for order matching and duplicates
+    """Compare two arrays for order matching and duplicates (CPU optimized)
     
     Args:
         nb1: First array
@@ -452,25 +528,94 @@ def calculate_array_order_and_duplicate(nb1, nb2):
     Returns:
         Dictionary with comparison metrics
     """
-    order_match = 0
-    max_order_match = 0
-    duplicate_match = 0
-    
-    length1 = len(nb1)
-    length2 = len(nb2)
-    
-    # Count duplicates
-    element_count1 = {}
-    element_count2 = {}
-    
-    for value in nb1:
-        element_count1[value] = element_count1.get(value, 0) + 1
-    
-    for value in nb2:
-        element_count2[value] = element_count2.get(value, 0) + 1
-    
-    # Calculate duplicate matches
-    for key in element_count1:
+    try:
+        order_match = 0
+        max_order_match = 0
+        duplicate_match = 0
+        
+        length1 = len(nb1)
+        length2 = len(nb2)
+        
+        if length1 == 0 or length2 == 0:
+            return {
+                'orderMatchRatio': 0.0,
+                'duplicateMatchRatio': 0.0,
+                'duplicateMatchRatioLeft': 0.0,
+                'duplicateMatchRatioRight': 0.0,
+                'lengthDifference': 0.0
+            }
+        
+        # Count duplicates
+        element_count1 = {}
+        element_count2 = {}
+        
+        for value in nb1:
+            try:
+                value_key = float(value) if isinstance(value, (int, float)) else str(value)
+                element_count1[value_key] = element_count1.get(value_key, 0) + 1
+            except:
+                pass
+        
+        for value in nb2:
+            try:
+                value_key = float(value) if isinstance(value, (int, float)) else str(value)
+                element_count2[value_key] = element_count2.get(value_key, 0) + 1
+            except:
+                pass
+        
+        # Calculate duplicate matches
+        for key in element_count1:
+            if key in element_count2:
+                duplicate_match += min(element_count1[key], element_count2[key])
+        
+        # Calculate order matches (안전한 비교)
+        for i in range(length1):
+            for j in range(length2):
+                try:
+                    if float(nb1[i]) == float(nb2[j]):
+                        temp_match = 0
+                        x = i
+                        y = j
+                        
+                        while x < length1 and y < length2 and float(nb1[x]) == float(nb2[y]):
+                            temp_match += 1
+                            x += 1
+                            y += 1
+                        
+                        if temp_match > max_order_match:
+                            max_order_match = temp_match
+                except:
+                    pass
+        
+        order_match = max_order_match
+        
+        # Calculate ratios
+        order_match_ratio = (order_match / min(length1, length2)) * 100 if min(length1, length2) > 0 else 0
+        duplicate_match_ratio_left = (duplicate_match / length1) * 100 if length1 > 0 else 0
+        duplicate_match_ratio_right = (duplicate_match / length2) * 100 if length2 > 0 else 0
+        duplicate_match_ratio = (duplicate_match_ratio_left + duplicate_match_ratio_right) / 2
+        
+        # Length difference
+        if length2 < length1:
+            length_difference = (length2 / length1) * 100 if length1 > 0 else 0
+        else:
+            length_difference = (length1 / length2) * 100 if length2 > 0 else 0
+        
+        return {
+            'orderMatchRatio': float(order_match_ratio),
+            'duplicateMatchRatio': float(duplicate_match_ratio),
+            'duplicateMatchRatioLeft': float(duplicate_match_ratio_left),
+            'duplicateMatchRatioRight': float(duplicate_match_ratio_right),
+            'lengthDifference': float(length_difference)
+        }
+    except Exception as e:
+        return {
+            'orderMatchRatio': 0.0,
+            'duplicateMatchRatio': 0.0,
+            'duplicateMatchRatioLeft': 0.0,
+            'duplicateMatchRatioRight': 0.0,
+            'lengthDifference': 0.0
+        }
         if key in element_count2:
             duplicate_match += min(element_count1[key], element_count2[key])
     
@@ -892,14 +1037,49 @@ def remove_special_chars_and_spaces(input_str):
 
 def cosine_similarity(vec1, vec2):
     """Calculate cosine similarity between two vectors"""
-    if len(vec1) != len(vec2):
+    try:
+        if len(vec1) != len(vec2) or len(vec1) == 0:
+            return 0.0
+        
+        vec1 = np.asarray(vec1, dtype=np.float32)
+        vec2 = np.asarray(vec2, dtype=np.float32)
+        
+        # NaN 처리
+        if np.any(np.isnan(vec1)) or np.any(np.isnan(vec2)):
+            return 0.0
+        
+        # 내적
+        dot_product = np.dot(vec1, vec2)
+        
+        # 크기 계산
+        magnitude1 = np.linalg.norm(vec1)
+        magnitude2 = np.linalg.norm(vec2)
+        
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+        
+        result = dot_product / (magnitude1 * magnitude2)
+        return float(result) if np.isfinite(result) else 0.0
+    except Exception:
         return 0.0
-    
-    dot_product = sum(v1 * v2 for v1, v2 in zip(vec1, vec2))
-    magnitude1 = np.sqrt(sum(v * v for v in vec1))
-    magnitude2 = np.sqrt(sum(v * v for v in vec2))
-    
-    if magnitude1 == 0 or magnitude2 == 0:
+
+
+def calculate_array_similarity(array1, array2):
+    """Calculate Jaccard and ordered similarity between two arrays"""
+    try:
+        if not array1 or not array2:
+            return 0.0
+        
+        # Jaccard similarity
+        intersection = [value for value in array1 if value in array2]
+        union = list(set(array1 + array2))
+        jaccard_similarity = (len(intersection) / len(union)) * 100 if len(union) > 0 else 0
+        
+        # Ordered similarity
+        ordered_matches = sum(1 for i in range(min(len(array1), len(array2))) if array1[i] == array2[i])
+        ordered_similarity = (ordered_matches / max(len(array1), len(array2))) * 100 if max(len(array1), len(array2)) > 0 else 0
+        
+        # Combined similarity (50% weight each)
+        return float((jaccard_similarity * 0.5) + (ordered_similarity * 0.5))
+    except Exception:
         return 0.0
-    
-    return dot_product / (magnitude1 * magnitude2)

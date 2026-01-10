@@ -3,6 +3,14 @@ Shared bot state and auto-buy configuration.
 Separate module to keep server.py lean.
 """
 
+import json
+import os
+from pathlib import Path
+
+# Auto-buy config file path
+AUTO_BUY_CONFIG_FILE = Path('data/auto_buy.json')
+
+# Default auto-buy configuration
 AUTO_BUY_CONFIG = {
     'enabled': False,
     'market': 'KRW-BTC',
@@ -13,6 +21,45 @@ AUTO_BUY_CONFIG = {
     'last_check': None,
     'last_buy': None
 }
+
+def load_auto_buy_config():
+    """Load auto-buy configuration from file."""
+    global AUTO_BUY_CONFIG
+    try:
+        if AUTO_BUY_CONFIG_FILE.exists():
+            with open(AUTO_BUY_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    # Update only existing keys to prevent injection
+                    for key in AUTO_BUY_CONFIG.keys():
+                        if key in data:
+                            AUTO_BUY_CONFIG[key] = data[key]
+                    print(f"✅ Auto-buy config loaded: enabled={AUTO_BUY_CONFIG.get('enabled')}, intervals={AUTO_BUY_CONFIG.get('intervals')}")
+                    return True
+        else:
+            print(f"⚠️ Auto-buy config file not found: {AUTO_BUY_CONFIG_FILE}")
+            # Create default file
+            save_auto_buy_config()
+    except Exception as e:
+        print(f"❌ Failed to load auto-buy config: {e}")
+    return False
+
+def save_auto_buy_config():
+    """Save auto-buy configuration to file."""
+    try:
+        # Ensure data directory exists
+        AUTO_BUY_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(AUTO_BUY_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(AUTO_BUY_CONFIG, f, indent=2, ensure_ascii=False)
+        print(f"💾 Auto-buy config saved: enabled={AUTO_BUY_CONFIG.get('enabled')}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to save auto-buy config: {e}")
+        return False
+
+# Load config on module import
+load_auto_buy_config()
 
 # Bot controller for start/stop from UI
 bot_ctrl = {

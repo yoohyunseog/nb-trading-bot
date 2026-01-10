@@ -18,6 +18,26 @@ import hashlib
 import random
 from datetime import datetime, timedelta
 
+# Windows CMD QuickEdit Mode 비활성화 (콘솔 클릭 시 프로그램 멈춤 방지)
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # Get console handle
+        console_handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        # Get current console mode
+        mode = ctypes.c_uint()
+        kernel32.GetConsoleMode(console_handle, ctypes.byref(mode))
+        # Disable ENABLE_QUICK_EDIT_MODE (0x0040)
+        ENABLE_EXTENDED_FLAGS = 0x0080
+        ENABLE_QUICK_EDIT_MODE = 0x0040
+        new_mode = mode.value & ~ENABLE_QUICK_EDIT_MODE
+        new_mode |= ENABLE_EXTENDED_FLAGS
+        kernel32.SetConsoleMode(console_handle, new_mode)
+        print("✅ Windows QuickEdit Mode 비활성화됨 (콘솔 클릭해도 멈추지 않음)")
+    except Exception as e:
+        print(f"⚠️ QuickEdit Mode 비활성화 실패 (무시 가능): {e}")
+
 # 새로운 유틸리티 시스템 임포트
 try:
     from utils.logger import setup_logger, get_logger, safe_print
@@ -60,11 +80,54 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ 모델 디렉토리 초기화 중 오류: {e}")
 from trade import Trader, TradeConfig
-from rating_ml import get_rating_ml
-from bot_state import bot_ctrl, AUTO_BUY_CONFIG
+from rating_ml_v2 import get_ml_system_v2
+from rating_ml_v3 import get_lstm_model  # LSTM 딥러닝 모델
+from helpers.rating_ml import get_rating_ml  # Legacy support
+from bot_state import bot_ctrl, AUTO_BUY_CONFIG, save_auto_buy_config
 
 # BIT calculation functions
 from helpers.features import BIT_MAX_NB, BIT_MIN_NB
+
+# Helper function to convert DataFrame to OHLCV data list
+def get_ohlcv_data(market: str, interval: str, count: int = 200):
+    """
+    Get OHLCV data as a list of dictionaries.
+    Converts get_candles() DataFrame to the format expected by ML rating functions.
+    
+    Args:
+        market: Market symbol (e.g., 'KRW-BTC')
+        interval: Candle interval (e.g., '10m', 'minute10')
+        count: Number of candles to fetch
+    
+    Returns:
+        List of dictionaries with keys: open, high, low, close, volume
+    """
+    try:
+        # Normalize interval format (convert '10m' to 'minute10' if needed)
+        if interval.endswith('m') and not interval.startswith('minute'):
+            # '10m' -> 'minute10'
+            interval = f"minute{interval[:-1]}"
+        
+        df = get_candles(market, interval, count=count)
+        
+        if df is None or df.empty:
+            return []
+        
+        # Convert DataFrame to list of dictionaries
+        result = []
+        for idx, row in df.iterrows():
+            result.append({
+                'open': float(row.get('open', 0)),
+                'high': float(row.get('high', 0)),
+                'low': float(row.get('low', 0)),
+                'close': float(row.get('close', 0)),
+                'volume': float(row.get('volume', 0))
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"get_ohlcv_data error: {e}")
+        return []
 
 # ===== 8BIT 마을 시스템 =====
 
@@ -4326,12 +4389,24 @@ def _load_ml(interval: str | None = None):
     return None
 
 def _make_insight(df: pd.DataFrame, window: int, ema_fast: int, ema_slow: int, interval: str, pack: dict | None = None) -> dict:
+    """Helper function to safely get values from pandas Series"""
+    def safe_get(series, key, default=0.0):
+        try:
+            if hasattr(series, 'get'):
+                return series.get(key, default)
+            elif isinstance(series, (pd.Series, pd.DataFrame)) and key in series.index:
+                return series[key]
+            else:
+                return default
+        except (KeyError, IndexError, TypeError):
+            return default
+    
     try:
         feat = _build_features(df, window, ema_fast, ema_slow, 5).dropna().copy()
         if feat.empty:
             return {}
         last = feat.iloc[-1]
-        zone_flag = int(round(float(last.get('zone_flag', 0))))
+        zone_flag = int(round(float(safe_get(last, 'zone_flag', 0))))
         zone = 'BLUE' if zone_flag == 1 else ('ORANGE' if zone_flag == -1 else 'UNKNOWN')
         try:
             HIGH = float(os.getenv('NB_HIGH', '0.55'))
@@ -4339,7 +4414,7 @@ def _make_insight(df: pd.DataFrame, window: int, ema_fast: int, ema_slow: int, i
         except Exception:
             HIGH, LOW = 0.55, 0.45
         rng = max(1e-9, HIGH - LOW)
-        rv = float(last.get('r', 0.5))
+        rv = float(safe_get(last, 'r', 0.5))
         p_blue_raw = max(0.0, min(1.0, (HIGH - rv) / rng))
         p_orange_raw = max(0.0, min(1.0, (rv - LOW) / rng))
         s0 = p_blue_raw + p_orange_raw
@@ -4372,19 +4447,19 @@ def _make_insight(df: pd.DataFrame, window: int, ema_fast: int, ema_slow: int, i
             'r': rv,
             'zone_flag': zone_flag,
             'zone': zone,
-            'zone_conf': float(last.get('zone_conf', 0.0)),
-            'dist_high': float(last.get('dist_high', 0.0)),
-            'dist_low': float(last.get('dist_low', 0.0)),
-            'extreme_gap': float(last.get('extreme_gap', 0.0)),
-            'zone_min_r': float(last.get('zone_min_r', rv)),
-            'zone_max_r': float(last.get('zone_max_r', rv)),
-            'zone_extreme_r': float(last.get('zone_extreme_r', rv)),
-            'zone_extreme_age': int(last.get('zone_extreme_age', 0)),
-            'zone_min_price': float(last.get('zone_min_price', last.get('close', 0.0))),
-            'zone_max_price': float(last.get('zone_max_price', last.get('close', 0.0))),
-            'zone_extreme_price': float(last.get('zone_extreme_price', last.get('close', 0.0))),
-            'w': float(last.get('w', 0.0)),
-            'ema_diff': float(last.get('ema_diff', 0.0)),
+            'zone_conf': float(safe_get(last, 'zone_conf', 0.0)),
+            'dist_high': float(safe_get(last, 'dist_high', 0.0)),
+            'dist_low': float(safe_get(last, 'dist_low', 0.0)),
+            'extreme_gap': float(safe_get(last, 'extreme_gap', 0.0)),
+            'zone_min_r': float(safe_get(last, 'zone_min_r', rv)),
+            'zone_max_r': float(safe_get(last, 'zone_max_r', rv)),
+            'zone_extreme_r': float(safe_get(last, 'zone_extreme_r', rv)),
+            'zone_extreme_age': int(safe_get(last, 'zone_extreme_age', 0)),
+            'zone_min_price': float(safe_get(last, 'zone_min_price', safe_get(last, 'close', 0.0))),
+            'zone_max_price': float(safe_get(last, 'zone_max_price', safe_get(last, 'close', 0.0))),
+            'zone_extreme_price': float(safe_get(last, 'zone_extreme_price', safe_get(last, 'close', 0.0))),
+            'w': float(safe_get(last, 'w', 0.0)),
+            'ema_diff': float(safe_get(last, 'ema_diff', 0.0)),
             'pct_blue_raw': float(p_blue_raw*100.0),
             'pct_orange_raw': float(p_orange_raw*100.0),
             'pct_blue': float(p_blue*100.0),
@@ -4984,13 +5059,18 @@ def _ml_predict_core(cur_interval: str):
             if X_values.size == 0 or len(X_values) == 0:
                 raise ValueError("X_values array is empty for predict")
             
-            # NaN 검증
+            # NaN 검증 및 안전한 처리
             if np.isnan(X_values).any():
-                logger.warning(f"NaN detected in X_values, shape={X_values.shape}")
-                # NaN을 중앙값으로 대체
+                nan_count = np.isnan(X_values).sum()
+                logger.warning(f"NaN detected: {nan_count} values in X_values, shape={X_values.shape}")
+                # NaN을 중앙값으로 대체 (벡터화 방식 - 안전함)
                 col_medians = np.nanmedian(X_values, axis=0)
-                inds = np.where(np.isnan(X_values))
-                X_values[inds] = np.take(col_medians, inds[1])
+                # numpy의 broadcasting을 사용한 안전한 대체
+                nan_mask = np.isnan(X_values)
+                for col_idx in range(X_values.shape[1]):
+                    col_nan_mask = nan_mask[:, col_idx]
+                    if col_nan_mask.any():
+                        X_values[col_nan_mask, col_idx] = col_medians[col_idx]
             
             # 2D 배열로 변환 (마지막 행만)
             if X_values.ndim == 1:
@@ -5016,8 +5096,10 @@ def _ml_predict_core(cur_interval: str):
         except Exception as e:
             logger.error(f"ML predict error (fallback mode): {e}")
             logger.error(f"X shape: {X.shape if hasattr(X, 'shape') else 'unknown'}, X_values shape: {X_values.shape if 'X_values' in locals() else 'unknown'}")
+            logger.error(f"X columns: {list(X.columns) if hasattr(X, 'columns') else 'N/A'}")
+            logger.error(f"X_values dtype: {X_values.dtype if 'X_values' in locals() and hasattr(X_values, 'dtype') else 'N/A'}")
             import traceback
-            logger.debug(traceback.format_exc())
+            logger.error(traceback.format_exc())
             pred = 0
         
         slope_hat = None
@@ -5085,8 +5167,14 @@ def _ml_predict_core(cur_interval: str):
             predicted_timestamp = None
         ins = {}
         try:
-            last = feat.iloc[-1]
-            zone_flag = int(round(float(last.get('zone_flag', 0))))
+            # Ensure we safely get the last row as a Series
+            if isinstance(feat, pd.DataFrame) and len(feat) > 0:
+                last = feat.iloc[-1]
+            else:
+                raise ValueError("Feature DataFrame is empty or invalid")
+            
+            # Safe access to Series values
+            zone_flag = int(round(float(last.get('zone_flag', 0) if hasattr(last, 'get') else last['zone_flag'] if 'zone_flag' in feat.columns else 0)))
             zone = 'BLUE' if zone_flag == 1 else ('ORANGE' if zone_flag == -1 else 'UNKNOWN')
             try:
                 HIGH = float(os.getenv('NB_HIGH', '0.55'))
@@ -5094,7 +5182,7 @@ def _ml_predict_core(cur_interval: str):
             except Exception:
                 HIGH, LOW = 0.55, 0.45
             rng = max(1e-9, HIGH - LOW)
-            rv = float(last.get('r', 0.5))
+            rv = float(last.get('r', 0.5) if hasattr(last, 'get') else last['r'] if 'r' in feat.columns else 0.5)
             p_blue_raw = max(0.0, min(1.0, (HIGH - rv) / rng))
             p_orange_raw = max(0.0, min(1.0, (rv - LOW) / rng))
             s0 = p_blue_raw + p_orange_raw
@@ -5126,27 +5214,41 @@ def _ml_predict_core(cur_interval: str):
                     p_blue, p_orange = p_blue_raw, p_orange_raw
             except Exception:
                 p_blue, p_orange = p_blue_raw, p_orange_raw
+            
+            # Helper function to safely get values from Series
+            def safe_get(series, key, default=0.0):
+                """Safely get value from pandas Series or dict-like object"""
+                try:
+                    if hasattr(series, 'get'):
+                        return series.get(key, default)
+                    elif isinstance(series, (pd.Series, pd.DataFrame)) and key in series.index:
+                        return series[key]
+                    else:
+                        return default
+                except (KeyError, IndexError, TypeError):
+                    return default
+            
             ins = {
                 'r': rv,
                 'zone_flag': zone_flag,
                 'zone': zone,
-                'zone_conf': float(last.get('zone_conf', 0.0)),
-                'dist_high': float(last.get('dist_high', 0.0)),
-                'dist_low': float(last.get('dist_low', 0.0)),
-                'extreme_gap': float(last.get('extreme_gap', 0.0)),
-                'zone_min_r': float(last.get('zone_min_r', rv)),
-                'zone_max_r': float(last.get('zone_max_r', rv)),
-                'zone_extreme_r': float(last.get('zone_extreme_r', rv)),
-                'zone_extreme_age': int(last.get('zone_extreme_age', 0)),
-                'zone_min_price': float(last.get('zone_min_price', last.get('close', 0.0))),
-                'zone_max_price': float(last.get('zone_max_price', last.get('close', 0.0))),
-                'zone_extreme_price': float(last.get('zone_extreme_price', last.get('close', 0.0))),
-                'blue_min_last': float(last.get('blue_min_last', rv)),
-                'orange_max_last': float(last.get('orange_max_last', rv)),
-                'blue_min_cur': float(last.get('blue_min_cur', rv)),
-                'orange_max_cur': float(last.get('orange_max_cur', rv)),
-                'w': float(last.get('w', 0.0)),
-                'ema_diff': float(last.get('ema_diff', 0.0)),
+                'zone_conf': float(safe_get(last, 'zone_conf', 0.0)),
+                'dist_high': float(safe_get(last, 'dist_high', 0.0)),
+                'dist_low': float(safe_get(last, 'dist_low', 0.0)),
+                'extreme_gap': float(safe_get(last, 'extreme_gap', 0.0)),
+                'zone_min_r': float(safe_get(last, 'zone_min_r', rv)),
+                'zone_max_r': float(safe_get(last, 'zone_max_r', rv)),
+                'zone_extreme_r': float(safe_get(last, 'zone_extreme_r', rv)),
+                'zone_extreme_age': int(safe_get(last, 'zone_extreme_age', 0)),
+                'zone_min_price': float(safe_get(last, 'zone_min_price', safe_get(last, 'close', 0.0))),
+                'zone_max_price': float(safe_get(last, 'zone_max_price', safe_get(last, 'close', 0.0))),
+                'zone_extreme_price': float(safe_get(last, 'zone_extreme_price', safe_get(last, 'close', 0.0))),
+                'blue_min_last': float(safe_get(last, 'blue_min_last', rv)),
+                'orange_max_last': float(safe_get(last, 'orange_max_last', rv)),
+                'blue_min_cur': float(safe_get(last, 'blue_min_cur', rv)),
+                'orange_max_cur': float(safe_get(last, 'orange_max_cur', rv)),
+                'w': float(safe_get(last, 'w', 0.0)),
+                'ema_diff': float(safe_get(last, 'ema_diff', 0.0)),
                 'pct_blue_raw': float(p_blue_raw*100.0),
                 'pct_orange_raw': float(p_orange_raw*100.0),
                 'pct_blue': float(p_blue*100.0),
@@ -5359,6 +5461,16 @@ def api_ml_rating_info():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/ml/rating/v2/info', methods=['GET'])
+def api_ml_rating_v2_info():
+    """ML Rating V2 모델 정보"""
+    try:
+        system = get_ml_system_v2()
+        return jsonify(system.get_status())
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/ml/rating/train', methods=['POST'])
 def api_ml_rating_train():
     try:
@@ -5378,6 +5490,28 @@ def api_ml_rating_train():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/ml/rating/v2/train', methods=['POST'])
+def api_ml_rating_v2_train():
+    """ML Rating V2 모델 훈련 (Zone + Profit 동시)"""
+    try:
+        payload = request.get_json(force=True) if request.is_json else {}
+    except Exception:
+        payload = {}
+    
+    try:
+        training_data = payload.get('training_data') if isinstance(payload, dict) else None
+        if not training_data:
+            training_data = _collect_ml_training_samples()
+        
+        system = get_ml_system_v2()
+        result = system.train(training_data)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"[api_ml_rating_v2_train] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/ml/rating/predict', methods=['POST'])
 def api_ml_rating_predict():
     try:
@@ -5391,6 +5525,161 @@ def api_ml_rating_predict():
         result = ml.predict(card)
         return jsonify(result)
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ml/rating/v2/predict', methods=['POST'])
+def api_ml_rating_v2_predict():
+    """ML Rating V2 예측 (Zone + Profit)"""
+    try:
+        if not request.is_json:
+            return jsonify({'ok': False, 'error': 'JSON required'}), 400
+        
+        payload = request.get_json(force=True)
+        card = payload.get('card') if isinstance(payload, dict) else None
+        use_zone_prediction = payload.get('use_zone_prediction', False)
+        predict_future = payload.get('predict_future', 0)  # 미래 예측 개수
+        
+        if not card:
+            return jsonify({'ok': False, 'error': 'card is required'}), 400
+        
+        system = get_ml_system_v2()
+        
+        # 단일 예측
+        if predict_future <= 0:
+            result = system.predict(card, use_zone_prediction=use_zone_prediction)
+            return jsonify(result)
+        
+        # 미래 시계열 예측 (여러 시점의 zone 예측)
+        future_predictions = []
+        
+        for i in range(predict_future):
+            # 각 미래 시점에 대해 zone 예측
+            result = system.predict(card, use_zone_prediction=True)
+            
+            if result.get('ok'):
+                future_predictions.append({
+                    'index': i,
+                    'zone': result.get('zone'),
+                    'zone_flag': result.get('zone_flag'),
+                    'confidence': result.get('zone_confidence', 0.5),
+                    'profit_rate': result.get('profit_rate', 0)
+                })
+        
+        return jsonify({
+            'ok': True,
+            'predictions': future_predictions,
+            'count': len(future_predictions)
+        })
+        
+    except Exception as e:
+        logger.error(f"[api_ml_rating_v2_predict] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ml/rating/v2/auto-train', methods=['POST'])
+def api_ml_rating_v2_auto_train():
+    """
+    차트 데이터 기반 자동 재훈련
+    - 현재 차트의 캔들 데이터로 N/B Wave 계산
+    - 실시간 학습 샘플 생성
+    - 자동 모델 재훈련
+    """
+    try:
+        payload = request.get_json(force=True) if request.is_json else {}
+        intervals = payload.get('intervals', ['10m', '30m', '1h'])
+        window = payload.get('window', 120)
+        
+        from helpers.candles import compute_r_from_ohlcv
+        import pandas as pd
+        
+        all_samples = []
+        
+        for interval in intervals:
+            try:
+                # 캔들 데이터 가져오기
+                candles_data = get_ohlcv_data('KRW-BTC', interval, count=300)
+                if not candles_data or len(candles_data) < window + 10:
+                    continue
+                
+                # N/B Wave 계산
+                for i in range(window, len(candles_data) - 10):
+                    window_data = candles_data[i-window:i]
+                    
+                    # Price N/B
+                    prices = [c['close'] for c in window_data]
+                    p_max = max(prices)
+                    p_min = min(prices)
+                    
+                    # Volume N/B
+                    volumes = [c['volume'] for c in window_data]
+                    v_max = max(volumes)
+                    v_min = min(volumes)
+                    
+                    # Turnover N/B
+                    turnovers = [c['close'] * c['volume'] for c in window_data]
+                    t_max = max(turnovers)
+                    t_min = min(turnovers)
+                    
+                    # r-value
+                    def calc_r(mx, mn):
+                        if mx <= 0 or mn <= 0:
+                            return 0.0
+                        return (mx - mn) / (mx + mn) if (mx + mn) > 0 else 0.0
+                    
+                    r_price = calc_r(p_max, p_min)
+                    r_vol = calc_r(v_max, v_min)
+                    r_amt = calc_r(t_max, t_min)
+                    avg_r = (r_price + r_vol + r_amt) / 3.0
+                    
+                    # Zone 판정
+                    if avg_r > 0.55:
+                        zone_flag = 1
+                    elif avg_r < 0.45:
+                        zone_flag = -1
+                    else:
+                        zone_flag = 0
+                    
+                    # 미래 수익률 (다음 10개 캔들 평균)
+                    current_price = candles_data[i]['close']
+                    future_prices = [candles_data[j]['close'] for j in range(i+1, i+11)]
+                    avg_future = sum(future_prices) / len(future_prices)
+                    profit_rate = (avg_future - current_price) / current_price if current_price > 0 else 0
+                    
+                    all_samples.append({
+                        'card': {
+                            'nb': {
+                                'price': {'max': p_max, 'min': p_min},
+                                'volume': {'max': v_max, 'min': v_min},
+                                'turnover': {'max': t_max, 'min': t_min}
+                            },
+                            'current_price': current_price,
+                            'interval': interval,
+                            'insight': {'zone_flag': zone_flag}
+                        },
+                        'profit_rate': profit_rate
+                    })
+            
+            except Exception as e:
+                logger.warning(f"[auto-train-v2] {interval} 처리 실패: {e}")
+                continue
+        
+        if len(all_samples) < 10:
+            return jsonify({'ok': False, 'error': f'샘플 부족: {len(all_samples)}개'}), 400
+        
+        # V2 모델 훈련
+        system = get_ml_system_v2()
+        result = system.train(all_samples)
+        
+        result['sample_count'] = len(all_samples)
+        result['intervals'] = intervals
+        
+        logger.info(f"[auto-train-v2] ✓ 재훈련 완료: {len(all_samples)}개 샘플")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[auto-train-v2] Error: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -5526,6 +5815,205 @@ def api_ml_rating_auto_train():
     
     except Exception as e:
         logger.error(f"[api_ml_rating_auto_train] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== ML Rating V3 API (LSTM 딥러닝) =====
+
+@app.route('/api/ml/rating/v3/info', methods=['GET'])
+def api_ml_rating_v3_info():
+    """LSTM 딥러닝 모델 정보"""
+    try:
+        lstm_model = get_lstm_model()
+        
+        info = {
+            "ok": True,
+            "model_type": "LSTM",
+            "model_loaded": lstm_model.model is not None,
+            "sequence_length": lstm_model.sequence_length,
+            "prediction_horizon": lstm_model.prediction_horizon,
+            "meta": lstm_model.meta
+        }
+        
+        return jsonify(info)
+    except Exception as e:
+        logger.error(f"[api_ml_rating_v3_info] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ml/rating/v3/train', methods=['POST'])
+def api_ml_rating_v3_train():
+    """LSTM 딥러닝 모델 훈련"""
+    try:
+        payload = request.get_json(force=True) if request.is_json else {}
+        intervals = payload.get('intervals', ['10m', '30m', '1h'])
+        window = payload.get('window', 120)
+        
+        from helpers.candles import compute_r_from_ohlcv
+        
+        all_samples = []
+        
+        for interval in intervals:
+            try:
+                # 캔들 데이터 가져오기 (충분히 많이)
+                candles_data = get_ohlcv_data('KRW-BTC', interval, count=500)
+                if not candles_data or len(candles_data) < window + 50:
+                    continue
+                
+                # 시계열 샘플 생성
+                for i in range(window, len(candles_data) - 10):
+                    window_data = candles_data[i-window:i]
+                    
+                    # N/B Wave 계산
+                    prices = [c['close'] for c in window_data]
+                    p_max = max(prices)
+                    p_min = min(prices)
+                    
+                    volumes = [c['volume'] for c in window_data]
+                    v_max = max(volumes)
+                    v_min = min(volumes)
+                    
+                    turnovers = [c['close'] * c['volume'] for c in window_data]
+                    t_max = max(turnovers)
+                    t_min = min(turnovers)
+                    
+                    def calc_r(mx, mn):
+                        if mx <= 0 or mn <= 0:
+                            return 0.0
+                        return (mx - mn) / (mx + mn) if (mx + mn) > 0 else 0.0
+                    
+                    r_price = calc_r(p_max, p_min)
+                    r_vol = calc_r(v_max, v_min)
+                    r_amt = calc_r(t_max, t_min)
+                    avg_r = (r_price + r_vol + r_amt) / 3.0
+                    
+                    # Zone 판정
+                    if avg_r > 0.55:
+                        zone_flag = 1
+                    elif avg_r < 0.45:
+                        zone_flag = -1
+                    else:
+                        zone_flag = 0
+                    
+                    current_price = candles_data[i]['close']
+                    
+                    all_samples.append({
+                        'card': {
+                            'nb': {
+                                'price': {'max': p_max, 'min': p_min},
+                                'volume': {'max': v_max, 'min': v_min},
+                                'turnover': {'max': t_max, 'min': t_min}
+                            },
+                            'current_price': current_price,
+                            'interval': interval,
+                            'insight': {'zone_flag': zone_flag}
+                        }
+                    })
+            
+            except Exception as e:
+                logger.warning(f"[v3-train] {interval} 처리 실패: {e}")
+                continue
+        
+        if len(all_samples) < 50:
+            return jsonify({'ok': False, 'error': f'샘플 부족 (최소 50개 필요): {len(all_samples)}개'}), 400
+        
+        # LSTM 모델 훈련
+        lstm_model = get_lstm_model()
+        result = lstm_model.train(all_samples)
+        
+        result['sample_count'] = len(all_samples)
+        result['intervals'] = intervals
+        
+        logger.info(f"[v3-train] ✓ LSTM 훈련 완료: {len(all_samples)}개 샘플")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[api_ml_rating_v3_train] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ml/rating/v3/predict', methods=['POST'])
+def api_ml_rating_v3_predict():
+    """LSTM 딥러닝 예측 (Zone + 가격 동시)"""
+    try:
+        if not request.is_json:
+            return jsonify({'ok': False, 'error': 'JSON required'}), 400
+        
+        payload = request.get_json(force=True)
+        interval = payload.get('interval', '10m')
+        sequence_count = payload.get('sequence_count', 30)  # 필요한 시퀀스 개수
+        
+        # 최근 캔들 데이터로 시퀀스 생성
+        candles_data = get_ohlcv_data('KRW-BTC', interval, count=sequence_count + 50)
+        
+        if not candles_data or len(candles_data) < sequence_count:
+            return jsonify({'ok': False, 'error': f'캔들 데이터 부족: {len(candles_data) if candles_data else 0}개'}), 400
+        
+        # 시퀀스 데이터 준비
+        sequence_data = []
+        window = 120
+        
+        for i in range(len(candles_data) - sequence_count, len(candles_data)):
+            if i < window:
+                continue
+            
+            window_data = candles_data[i-window:i]
+            
+            # N/B Wave 계산
+            prices = [c['close'] for c in window_data]
+            p_max = max(prices)
+            p_min = min(prices)
+            
+            volumes = [c['volume'] for c in window_data]
+            v_max = max(volumes)
+            v_min = min(volumes)
+            
+            turnovers = [c['close'] * c['volume'] for c in window_data]
+            t_max = max(turnovers)
+            t_min = min(turnovers)
+            
+            def calc_r(mx, mn):
+                if mx <= 0 or mn <= 0:
+                    return 0.0
+                return (mx - mn) / (mx + mn) if (mx + mn) > 0 else 0.0
+            
+            r_price = calc_r(p_max, p_min)
+            r_vol = calc_r(v_max, v_min)
+            r_amt = calc_r(t_max, t_min)
+            avg_r = (r_price + r_vol + r_amt) / 3.0
+            
+            # Zone 판정
+            if avg_r > 0.55:
+                zone_flag = 1
+            elif avg_r < 0.45:
+                zone_flag = -1
+            else:
+                zone_flag = 0
+            
+            current_price = candles_data[i]['close']
+            
+            sequence_data.append({
+                'card': {
+                    'nb': {
+                        'price': {'max': p_max, 'min': p_min},
+                        'volume': {'max': v_max, 'min': v_min},
+                        'turnover': {'max': t_max, 'min': t_min}
+                    },
+                    'current_price': current_price,
+                    'interval': interval,
+                    'insight': {'zone_flag': zone_flag}
+                }
+            })
+        
+        # LSTM 예측
+        lstm_model = get_lstm_model()
+        result = lstm_model.predict(sequence_data)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"[api_ml_rating_v3_predict] Error: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -7897,6 +8385,16 @@ def api_nb_wave():
         
         # Get OHLCV data
         df = get_candles(cfg.market, timeframe, count=bars)
+        
+        # 빈 데이터 확인
+        if df is None or df.empty:
+            logger.warning(f"[/api/nb-wave] Empty dataframe for {cfg.market} {timeframe}")
+            return jsonify({
+                'ok': False, 
+                'error': f'No data available for {cfg.market} {timeframe}',
+                'timeframe': timeframe
+            }), 503
+        
         if not {'open','high','low','close'}.issubset(df.columns):
             return jsonify({'ok': False, 'error': 'OHLCV missing'}), 400
         
@@ -7976,12 +8474,12 @@ def api_nb_wave():
             
             zones.append({
                 'zone': zone,
-                'strength': strength,
-                'volume': volume,
-                'r_value': r_val,
-                'max_bit': max_bit,
-                'min_bit': min_bit,
-                'bit_diff': max_bit - min_bit
+                'strength': float(strength),
+                'volume': float(volume),
+                'r_value': float(r_val),
+                'max_bit': float(max_bit),
+                'min_bit': float(min_bit),
+                'bit_diff': float(max_bit - min_bit)
             })
             
             # Create time labels
@@ -7995,10 +8493,14 @@ def api_nb_wave():
         blue_count = sum(1 for z in zones if z['zone'] == 'BLUE')
         current_price = float(df['close'].iloc[-1]) if len(df) > 0 else 0
         
-        # Calculate average BIT values
-        avg_max_bit = np.mean([z['max_bit'] for z in zones if z['max_bit'] != 5.5])
-        avg_min_bit = np.mean([z['min_bit'] for z in zones if z['min_bit'] != 5.5])
-        avg_bit_diff = np.mean([z['bit_diff'] for z in zones if z['bit_diff'] != 0])
+        # Calculate average BIT values (안전하게 빈 배열 처리)
+        max_bit_values = [z['max_bit'] for z in zones if z['max_bit'] != 5.5]
+        min_bit_values = [z['min_bit'] for z in zones if z['min_bit'] != 5.5]
+        bit_diff_values = [z['bit_diff'] for z in zones if z['bit_diff'] != 0]
+        
+        avg_max_bit = np.mean(max_bit_values) if max_bit_values else 5.5
+        avg_min_bit = np.mean(min_bit_values) if min_bit_values else 5.5
+        avg_bit_diff = np.mean(bit_diff_values) if bit_diff_values else 0.0
         
         summary = {
             'orange': orange_count,
@@ -8024,6 +8526,9 @@ def api_nb_wave():
         })
         
     except Exception as e:
+        logger.error(f"[/api/nb-wave] Error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

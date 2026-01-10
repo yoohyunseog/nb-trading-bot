@@ -49,7 +49,7 @@ def register_trade_routes(app, env: Dict[str, Any]):
     # ---- Auto-Buy ----
     @app.route('/api/auto-buy/config', methods=['GET', 'POST'])
     def api_auto_buy_config():
-        """Get or update auto-buy configuration (in-memory)."""
+        """Get or update auto-buy configuration (persistent to file)."""
         nonlocal AUTO_BUY_CONFIG
         try:
             if request.method == 'POST':
@@ -63,6 +63,12 @@ def register_trade_routes(app, env: Dict[str, Any]):
                         AUTO_BUY_CONFIG['interval'] = data['intervals'][0]
                     if 'interval' in data:
                         AUTO_BUY_CONFIG['intervals'] = [data['interval']]
+                    
+                    # Save to file for persistence
+                    save_fn = env.get('save_auto_buy_config')
+                    if callable(save_fn):
+                        save_fn()
+                        logger.info(f"Auto-buy config updated and saved: enabled={AUTO_BUY_CONFIG.get('enabled')}")
             return jsonify({'ok': True, 'config': AUTO_BUY_CONFIG})
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500

@@ -127,35 +127,42 @@ const FlowDashboard = (() => {
       throw new Error('invalid params');
     }
 
-    const toDiff = (max, min) => Number(max) - Number(min);
+    const toNum = (v) => Number(v);
+    const pMax = toNum(priceMax);
+    const pMin = toNum(priceMin);
+    const vMax = toNum(volumeMax);
+    const vMin = toNum(volumeMin);
+    const aMax = toNum(amountMax);
+    const aMin = toNum(amountMin);
 
-    const spreadPrice = toDiff(priceMax, priceMin);
-    const spreadVol = toDiff(volumeMax, volumeMin);
-    const spreadAmt = toDiff(amountMax, amountMin);
+    // MAX + MIN 합계 기반 r값 계산 (0~1)
+    // N/B 최대값 = 99, 따라서 MAX + MIN 최대값 = 99 × 2 = 198
+    const calcR = (max, min) => {
+      const sum = max + min;
+      const ratio = max > 0 && min > 0 ? max / min : 1;
+      
+      // 합계 점수 (0~0.5): MAX + MIN 합계가 클수록 높음 (최대 198 기준)
+      const sumScore = Math.min(0.5, sum / 198 * 0.5);
+      
+      // 비율 보너스 (0~0.5): MAX > MIN이면 높음, MAX < MIN이면 낮음
+      const ratioScore = ratio > 1 
+        ? Math.min(0.5, (ratio - 1) * 0.2)    // MAX > MIN: 보너스
+        : Math.max(-0.3, (1 - 1/ratio) * -0.3); // MAX < MIN: 페널티
+      
+      return Math.max(0, Math.min(1, sumScore + ratioScore + 0.3)); // 기본 0.3 더해서 최소값 확보
+    };
 
-    // Guard: MAX must be greater than MIN for all metrics
-    if (spreadPrice <= 0 || spreadVol <= 0 || spreadAmt <= 0) {
-      return {
-        code: 'INVALID_RANGE',
-        league: '-',
-        group: 'AUTO',
-        super: false,
-        avgDiff: 0,
-        color: '#e6eefc',
-        enhancement: 1,
-        priceMax, priceMin, volumeMax, volumeMin, amountMax, amountMin,
-        diffPrice: spreadPrice, diffVol: spreadVol, diffAmt: spreadAmt
-      };
-    }
+    const rPrice = calcR(pMax, pMin);
+    const rVol = calcR(vMax, vMin);
+    const rAmt = calcR(aMax, aMin);
 
-    const diffPrice = Math.abs(spreadPrice);
-    const diffVol = Math.abs(spreadVol);
-    const diffAmt = Math.abs(spreadAmt);
+    const spreadPrice = Math.abs(pMax - pMin);
+    const spreadVol = Math.abs(vMax - vMin);
+    const spreadAmt = Math.abs(aMax - aMin);
 
-    // Normalize within current card range (0~1) for grading letters
-    const rPrice = Math.min(1, diffPrice / spreadPrice);
-    const rVol = Math.min(1, diffVol / spreadVol);
-    const rAmt = Math.min(1, diffAmt / spreadAmt);
+    const diffPrice = spreadPrice;
+    const diffVol = spreadVol;
+    const diffAmt = spreadAmt;
 
     const rToLetter = (r) => {
       if (r >= 0.80) return 'S';
@@ -330,6 +337,34 @@ const FlowDashboard = (() => {
     const normalizedPrice = normalize(priceSample);
     const normalizedVol = normalize(volumeSample);
 
+    // ===== 예측 구간 데이터 추가 =====
+    // ML 예측 결과를 미래 시점에 크고 투명한 동그라미로 표시
+    const mlPrediction = window.flowDashboardState?.marketData || {};
+    const mlAction = mlPrediction.action || mlPrediction.insight?.zone;
+    const horizon = mlPrediction.horizon || 5; // 예측 범위 (5봉 후)
+    
+    // 미래 시점 레이블 추가 (예측 구간)
+    const futureLabels = [...labels];
+    for (let i = 0; i < horizon; i++) {
+      futureLabels.push('');
+    }
+    
+    // 예측 포인트 데이터 (현재 + 빈 값들 + 예측값)
+    const predictionData = [...normalizedPrice];
+    for (let i = 0; i < horizon - 1; i++) {
+      predictionData.push(null); // 중간은 비움
+    }
+    // 마지막에 예측 포인트 추가 (현재 가격의 정규화 값 유지)
+    predictionData.push(normalizedPrice[normalizedPrice.length - 1] || 0.5);
+    
+    // 예측 Zone에 따른 색상
+    const predColor = mlAction === 'BLUE' ? 'rgba(0,209,255,0.4)' : 
+                      mlAction === 'ORANGE' ? 'rgba(255,183,3,0.4)' : 
+                      'rgba(128,128,128,0.3)';
+    const predBorderColor = mlAction === 'BLUE' ? '#00d1ff' : 
+                            mlAction === 'ORANGE' ? '#ffb703' : 
+                            '#888888';
+
     if (ccSummaryChart) {
       try { ccSummaryChart.destroy(); } catch (_) {}
     }
@@ -337,7 +372,7 @@ const FlowDashboard = (() => {
     ccSummaryChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels,
+        labels: futureLabels,
         datasets: [
           {
             label: '가격',
@@ -363,6 +398,22 @@ const FlowDashboard = (() => {
             pointRadius: 0.5,
             pointBackgroundColor: '#0ecb81',
             yAxisID: 'y1'
+          },
+          {
+            label: `AI 예측 (${mlAction || 'N/A'})`,
+            data: predictionData,
+            borderColor: predBorderColor,
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [5, 5], // 점선
+            fill: false,
+            tension: 0,
+            pointRadius: predictionData.map((v, i) => i === predictionData.length - 1 ? 20 : 0), // 마지막만 크게
+            pointHoverRadius: predictionData.map((v, i) => i === predictionData.length - 1 ? 25 : 0),
+            pointBackgroundColor: predictionData.map((v, i) => i === predictionData.length - 1 ? predColor : 'transparent'),
+            pointBorderColor: predictionData.map((v, i) => i === predictionData.length - 1 ? predBorderColor : 'transparent'),
+            pointBorderWidth: 3,
+            yAxisID: 'y'
           }
         ]
       },
@@ -1013,6 +1064,11 @@ const FlowDashboard = (() => {
     },
     
     reset() {
+      // Clean up all timers and pollings to prevent memory leaks
+      stopLivePricePolling();
+      if (window.buyCardRefreshInterval) { clearInterval(window.buyCardRefreshInterval); window.buyCardRefreshInterval = null; }
+      AutoBuy.stop();
+      
       this.currentStep = 0;
       $('.step-num')
         .removeClass('in-progress completed')
@@ -1092,37 +1148,54 @@ const FlowDashboard = (() => {
         }
         
         console.log('🌊 N/B Wave API response:', data.wave_data.length, 'points');
+        this.applyNBWaveToChart(chart, data);
+        console.log('✅ N/B Wave rendered from API');
+      } catch (error) {
+        console.error('❌ N/B Wave API error:', error);
+        throw error;
+      }
+    },
+    
+    applyNBWaveToChart(chart, nbWaveData) {
+      try {
+        console.log('🌊 Applying N/B Wave to chart');
         
-        // Create baseline series (chart stays unchanged)
-        const nbWaveSeries = chart.addBaselineSeries({
-          baseValue: { type: 'price', price: data.base },
-          topFillColor1: 'rgba(255,183,3,0.70)',
-          topFillColor2: 'rgba(255,183,3,0.40)',
-          topLineColor: '#ffb703',
-          bottomFillColor1: 'rgba(0,209,255,0.70)',
-          bottomFillColor2: 'rgba(0,209,255,0.40)',
-          bottomLineColor: '#00d1ff',
-          lineWidth: 6,
-          priceLineVisible: false,
-          lastValueVisible: false
-        });
-        
+        // Create or reuse baseline series
+        let nbWaveSeries = chart._nbWaveSeries;
+        if (!nbWaveSeries) {
+          nbWaveSeries = chart.addBaselineSeries({
+            baseValue: { type: 'price', price: nbWaveData.base },
+            topFillColor1: 'rgba(255,183,3,0.70)',
+            topFillColor2: 'rgba(255,183,3,0.40)',
+            topLineColor: '#ffb703',
+            bottomFillColor1: 'rgba(0,209,255,0.70)',
+            bottomFillColor2: 'rgba(0,209,255,0.40)',
+            bottomLineColor: '#00d1ff',
+            lineWidth: 6,
+            priceLineVisible: false,
+            lastValueVisible: false
+          });
+          chart._nbWaveSeries = nbWaveSeries;
+        } else {
+          nbWaveSeries.applyOptions({ baseValue: { type: 'price', price: nbWaveData.base } });
+        }
         // Set wave data
-        nbWaveSeries.setData(data.wave_data);
+        nbWaveSeries.setData(nbWaveData.wave_data);
         
         // Persist for reuse (Step 1 zone status, current card)
         state.nbWave = { 
-          data: data.wave_data, 
-          base: data.base,
-          summary: data.summary || null,
+          data: nbWaveData.wave_data, 
+          base: nbWaveData.base,
+          summary: nbWaveData.summary || null,
           fromAPI: true
         };
+        
         // Keep a simple zone series & zone array for current card mini strip
         try {
-          const base = Number(data.base || 0);
+          const base = Number(nbWaveData.base || 0);
           // Generate zone array using BaselineSeries rule: value > base = ORANGE, else BLUE
-          const zoneArrayBaseline = data.wave_data.map(pt => (Number(pt.value) > base ? 'ORANGE' : 'BLUE'));
-          const zoneSeries = data.wave_data.map(pt => ({ value: Number(pt.value), base, zone: pt.zone || (Number(pt.value) > base ? 'ORANGE' : 'BLUE') }));
+          const zoneArrayBaseline = nbWaveData.wave_data.map(pt => (Number(pt.value) > base ? 'ORANGE' : 'BLUE'));
+          const zoneSeries = nbWaveData.wave_data.map(pt => ({ value: Number(pt.value), base, zone: pt.zone || (Number(pt.value) > base ? 'ORANGE' : 'BLUE') }));
           
           state.zoneSeries = zoneSeries;
           state.nbWaveZones = zoneArrayBaseline; // pure ORANGE/BLUE array by baseline rule for reuse
@@ -1130,13 +1203,13 @@ const FlowDashboard = (() => {
           window.nbWaveZonesConsole = zoneArrayBaseline; // also attach to window for direct console access
           // Update current zone to the last zone from array
           state.currentZone = zoneArrayBaseline[zoneArrayBaseline.length - 1] || 'BLUE';
-          console.log('📊 N/B Wave zones (baseline rule):', zoneArrayBaseline);
+          console.log('📊 N/B Wave zones (baseline rule):', zoneArrayBaseline.length, 'zones');
           console.log('📊 Current zone (last):', state.currentZone);
         } catch(_){ }
         
-        console.log('✅ N/B Wave rendered from API');
+        console.log('✅ N/B Wave applied to chart');
       } catch (error) {
-        console.error('❌ N/B Wave API error:', error);
+        console.error('❌ Apply N/B Wave error:', error);
         throw error;
       }
     },
@@ -1146,18 +1219,22 @@ const FlowDashboard = (() => {
         console.log('🌊 Rendering N/B Wave (client-side fallback)');
         
         const clamp = (v, lo=0, hi=100) => Math.min(hi, Math.max(lo, v));
-        const nbWaveSeries = chart.addBaselineSeries({
-          baseValue: { type: 'price', price: 0 },
-          topFillColor1: 'rgba(255,183,3,0.70)',
-          topFillColor2: 'rgba(255,183,3,0.40)',
-          topLineColor: '#ffb703',
-          bottomFillColor1: 'rgba(0,209,255,0.70)',
-          bottomFillColor2: 'rgba(0,209,255,0.40)',
-          bottomLineColor: '#00d1ff',
-          lineWidth: 6,
-          priceLineVisible: false,
-          lastValueVisible: false
-        });
+        let nbWaveSeries = chart._nbWaveSeries;
+        if (!nbWaveSeries) {
+          nbWaveSeries = chart.addBaselineSeries({
+            baseValue: { type: 'price', price: 0 },
+            topFillColor1: 'rgba(255,183,3,0.70)',
+            topFillColor2: 'rgba(255,183,3,0.40)',
+            topLineColor: '#ffb703',
+            bottomFillColor1: 'rgba(0,209,255,0.70)',
+            bottomFillColor2: 'rgba(0,209,255,0.40)',
+            bottomLineColor: '#00d1ff',
+            lineWidth: 6,
+            priceLineVisible: false,
+            lastValueVisible: false
+          });
+          chart._nbWaveSeries = nbWaveSeries;
+        }
 
         const n = 50;
         const outWave = [];
@@ -1241,30 +1318,11 @@ const FlowDashboard = (() => {
       });
     },
 
-    renderPriceChart(chartData) {
+    async renderPriceChart(chartData) {
       const container = document.getElementById('step2Graph');
       if (!container) {
         console.error('Chart container not found');
         return;
-      }
-      
-      // Cleanup existing chart
-      if (container._chartInstance) {
-        try {
-          container._chartInstance.remove();
-        } catch (e) {
-          console.warn('Chart cleanup warning:', e);
-        }
-      }
-      if (container._resizeObserver) {
-        container._resizeObserver.disconnect();
-      }
-      
-      // Clear existing content
-      container.innerHTML = '';
-      // Ensure positioning for overlays
-      if (!container.style.position || container.style.position === 'static') {
-        container.style.position = 'relative';
       }
       
       const rows = chartData?.data || [];
@@ -1282,36 +1340,78 @@ const FlowDashboard = (() => {
       }
       
       try {
-        // Create chart - index.html과 동일한 옵션
-        const chart = LightweightCharts.createChart(container, {
-          autoSize: true,
-          layout: { background: { type: 'solid', color: '#0b1220' }, textColor: '#e6eefc' },
-          grid: {
-            vertLines: { color: 'rgba(255,255,255,0.05)' },
-            horzLines: { color: 'rgba(255,255,255,0.05)' }
-          },
-          rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
-          leftPriceScale: { visible: false },
-          timeScale: {
-            borderColor: 'rgba(255,255,255,0.08)',
-            timeVisible: true,
-            secondsVisible: false,
-            fixLeftEdge: true,
-            fixRightEdge: true
-          },
-          crosshair: { mode: LightweightCharts.CrosshairMode.Magnet },
-          handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-          handleScale: { mouseWheel: false, pinch: false, axisPressedMouseMove: false }
-        });
+        // Step 1: N/B WAVE 데이터를 먼저 확인/로드 (Step 3에서 캐시된 데이터 우선)
+        console.log('🌊 Step 1: N/B Wave 데이터 확인/로드');
+        let nbWaveData = null;
+        if (state.nbWaveCached && Array.isArray(state.nbWaveCached.wave_data) && state.nbWaveCached.wave_data.length > 0) {
+          nbWaveData = state.nbWaveCached;
+          console.log('✅ Step 4: Using cached NB Wave from Step 3:', nbWaveData.wave_data.length, 'points');
+        } else {
+          try {
+            const data = await API.getNbWaveOhlcv(state.selectedInterval, 300, 50);
+            if (data.ok && data.wave_data && data.wave_data.length > 0) {
+              nbWaveData = data;
+              console.log('✅ Step 4: Fetched NB Wave (no cache available):', data.wave_data.length, 'points');
+            }
+          } catch (err) {
+            console.warn('⚠️ Step 4: N/B Wave API 오류:', err);
+          }
+        }
         
-        // Add candlestick series - index.html과 동일한 색상
-        const candleSeries = chart.addCandlestickSeries({ 
-          upColor: '#0ecb81', 
-          downColor: '#f6465d', 
-          wickUpColor: '#0ecb81', 
-          wickDownColor: '#f6465d', 
-          borderVisible: false 
-        });
+        // Step 2: 차트를 생성하거나 재사용합니다
+        console.log('📊 Step 2: 차트 생성/재사용 시작');
+        if (!container.style.position || container.style.position === 'static') {
+          container.style.position = 'relative';
+        }
+        let chart = container._chartInstance;
+        if (!chart) {
+          chart = LightweightCharts.createChart(container, {
+            autoSize: true,
+            layout: { background: { type: 'solid', color: '#0b1220' }, textColor: '#e6eefc' },
+            grid: {
+              vertLines: { color: 'rgba(255,255,255,0.05)' },
+              horzLines: { color: 'rgba(255,255,255,0.05)' }
+            },
+            rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+            leftPriceScale: { visible: false },
+            timeScale: {
+              borderColor: 'rgba(255,255,255,0.08)',
+              timeVisible: true,
+              secondsVisible: false,
+              fixLeftEdge: true,
+              fixRightEdge: false  // 우측 스크롤 가능하도록 변경
+            },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Magnet },
+            handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+            handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: false }  // 마우스 휠 줌 활성화
+          });
+          container._chartInstance = chart;
+          container._series = {};
+          
+          // Add double-click listener to reset chart view
+          container.addEventListener('dblclick', () => {
+            try {
+              chart.timeScale().fitContent();
+              localStorage.removeItem('chartViewRange'); // 뷰 초기화도 함께 저장
+              console.log('📊 차트 뷰 리셋 (더블클릭)');
+            } catch(e) { console.warn('Chart reset error:', e?.message); }
+          });
+        } else {
+          container._series = container._series || {};
+        }
+        
+        // Add or reuse candlestick series - index.html과 동일한 색상
+        let candleSeries = container._series.candle;
+        if (!candleSeries) {
+          candleSeries = chart.addCandlestickSeries({ 
+            upColor: '#0ecb81', 
+            downColor: '#f6465d', 
+            wickUpColor: '#0ecb81', 
+            wickDownColor: '#f6465d', 
+            borderVisible: false 
+          });
+          container._series.candle = candleSeries;
+        }
         
         // Prepare candlestick data from OHLCV rows
         const validRows = rows.filter(r => {
@@ -1331,15 +1431,22 @@ const FlowDashboard = (() => {
         // 시간 오름차순 정렬
         const sortedCandles = candleData.sort((a, b) => a.time - b.time);
 
-        // 거래량 히스토그램 시리즈 추가 (상승/하락 색상 분리)
-        const volumeSeries = chart.addHistogramSeries({
-          color: '#26a69a',
-          lineWidth: 1,
-          priceFormat: { type: 'volume' },
-          priceScaleId: 'left',
-          overlay: true,
-          scaleMargins: { top: 0.8, bottom: 0 }
-        });
+        // 거래량 라인 시리즈 추가/재사용 (파도 모양 - 별도 패널)
+        let volumeSeries = container._series.volume;
+        if (!volumeSeries) {
+          volumeSeries = chart.addLineSeries({
+            color: 'rgba(14,203,129,0.7)',      // 반투명 초록색
+            lineWidth: 2,                        // 라인 두께
+            priceFormat: { type: 'volume' },
+            priceScaleId: '',                    // 별도 스케일 (빈 문자열)
+            overlay: false,                      // 별도 패널로 분리
+            scaleMargins: { top: 0, bottom: 0 },
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false
+          });
+          container._series.volume = volumeSeries;
+        }
 
         const volumeData = validRows.map((r, idx) => {
           const isUp = sortedCandles[idx]?.close >= sortedCandles[idx]?.open;
@@ -1355,7 +1462,7 @@ const FlowDashboard = (() => {
         console.log('📊 Last candle:', sortedCandles[sortedCandles.length - 1]);
 
         candleSeries.setData(sortedCandles);
-        volumeSeries.setData(volumeData);
+        //volumeSeries.setData(volumeData);
 
         // Initialize global candle cache for live UI updates
         try {
@@ -1364,13 +1471,34 @@ const FlowDashboard = (() => {
 
         // Start live polling for latest candle to keep current price moving
         try { startLivePricePolling(state.selectedInterval); } catch(_) {}
+        
+        // 모든 데이터 업데이트 후 저장된 뷰 복원 (setData 호출이 뷰를 리셋할 수 있으므로)
+        const restoreViewAfterDataUpdate = () => {
+          try {
+            const savedView = localStorage.getItem('chartViewRange');
+            if (savedView) {
+              const { from, to } = JSON.parse(savedView);
+              if (typeof from === 'number' && typeof to === 'number' && from < to) {
+                chart.timeScale().setVisibleRange({ from, to });
+                console.log('🔄 데이터 업데이트 후 뷰 복원:', { from, to });
+              }
+            }
+          } catch(e) {
+            console.debug('View restore after update error:', e?.message);
+          }
+        };
+        // requestAnimationFrame을 사용해 모든 렌더링이 완료된 후 뷰 복원
+        requestAnimationFrame(() => restoreViewAfterDataUpdate());
 
-        // --- N/B wave overlay using server API ---
-        this.renderNBWaveFromAPI(chart, state.selectedInterval).catch(err => {
-          console.warn('N/B Wave API failed, falling back to client calculation:', err);
-          // Fallback to client-side calculation
+        // Step 3: N/B wave를 차트에 렌더링 (이미 로드된 데이터 사용)
+        console.log('🌊 Step 3: N/B Wave 차트에 렌더링');
+        if (nbWaveData) {
+          this.applyNBWaveToChart(chart, nbWaveData);
+        } else {
+          console.warn('⚠️ N/B Wave 데이터 없음, 클라이언트 계산 사용');
           this.renderNBWaveClientSide(chart, validRows, sortedCandles);
-        });
+        }
+        console.log('✅ N/B Wave 렌더링 완료 - Step 5 진행 가능');
 
         // --- EMA overlays (fast/slow) ---
         const ema = (values, period) => {
@@ -1398,8 +1526,16 @@ const FlowDashboard = (() => {
         const emaFastArr = ema(closes, 10).map((v, i) => ({ time: times[i], value: v })).filter(p => p.value !== undefined);
         const emaSlowArr = ema(closes, 30).map((v, i) => ({ time: times[i], value: v })).filter(p => p.value !== undefined);
 
-        const emaFastSeries = chart.addLineSeries({ color: 'rgba(14,203,129,0.9)', lineWidth: 2, priceLineVisible: false });
-        const emaSlowSeries = chart.addLineSeries({ color: 'rgba(246,70,93,0.9)', lineWidth: 2, priceLineVisible: false });
+        let emaFastSeries = container._series.emaFast;
+        if (!emaFastSeries) {
+          emaFastSeries = chart.addLineSeries({ color: 'rgba(14,203,129,0.9)', lineWidth: 2, priceLineVisible: false });
+          container._series.emaFast = emaFastSeries;
+        }
+        let emaSlowSeries = container._series.emaSlow;
+        if (!emaSlowSeries) {
+          emaSlowSeries = chart.addLineSeries({ color: 'rgba(246,70,93,0.9)', lineWidth: 2, priceLineVisible: false });
+          container._series.emaSlow = emaSlowSeries;
+        }
         emaFastSeries.setData(emaFastArr);
         emaSlowSeries.setData(emaSlowArr);
 
@@ -1417,9 +1553,21 @@ const FlowDashboard = (() => {
         const sma50 = sma(closes, 50).map((v, i) => ({ time: times[i], value: v }));
         const sma100 = sma(closes, 100).map((v, i) => ({ time: times[i], value: v }));
         const sma200 = sma(closes, 200).map((v, i) => ({ time: times[i], value: v }));
-        const sma50Series = chart.addLineSeries({ color: '#9aa0a6', lineWidth: 1, priceLineVisible: false });
-        const sma100Series = chart.addLineSeries({ color: '#c7cbd1', lineWidth: 1, priceLineVisible: false });
-        const sma200Series = chart.addLineSeries({ color: '#e0e3e7', lineWidth: 1, priceLineVisible: false });
+        let sma50Series = container._series.sma50;
+        if (!sma50Series) {
+          sma50Series = chart.addLineSeries({ color: '#9aa0a6', lineWidth: 1, priceLineVisible: false });
+          container._series.sma50 = sma50Series;
+        }
+        let sma100Series = container._series.sma100;
+        if (!sma100Series) {
+          sma100Series = chart.addLineSeries({ color: '#c7cbd1', lineWidth: 1, priceLineVisible: false });
+          container._series.sma100 = sma100Series;
+        }
+        let sma200Series = container._series.sma200;
+        if (!sma200Series) {
+          sma200Series = chart.addLineSeries({ color: '#e0e3e7', lineWidth: 1, priceLineVisible: false });
+          container._series.sma200 = sma200Series;
+        }
         sma50Series.setData(sma50);
         sma100Series.setData(sma100);
         sma200Series.setData(sma200);
@@ -1428,12 +1576,45 @@ const FlowDashboard = (() => {
         const ema9 = ema(closes, 9).map((v, i) => ({ time: times[i], value: v })).filter(p => p.value !== undefined);
         const ema12 = ema(closes, 12).map((v, i) => ({ time: times[i], value: v })).filter(p => p.value !== undefined);
         const ema26 = ema(closes, 26).map((v, i) => ({ time: times[i], value: v })).filter(p => p.value !== undefined);
-        const ema9Series = chart.addLineSeries({ color: '#ffd166', lineWidth: 1, priceLineVisible: false });
-        const ema12Series = chart.addLineSeries({ color: '#fca311', lineWidth: 1, priceLineVisible: false });
-        const ema26Series = chart.addLineSeries({ color: '#fb8500', lineWidth: 1, priceLineVisible: false });
+        let ema9Series = container._series.ema9;
+        if (!ema9Series) {
+          ema9Series = chart.addLineSeries({ color: '#ffd166', lineWidth: 1, priceLineVisible: false });
+          container._series.ema9 = ema9Series;
+        }
+        let ema12Series = container._series.ema12;
+        if (!ema12Series) {
+          ema12Series = chart.addLineSeries({ color: '#fca311', lineWidth: 1, priceLineVisible: false });
+          container._series.ema12 = ema12Series;
+        }
+        let ema26Series = container._series.ema26;
+        if (!ema26Series) {
+          ema26Series = chart.addLineSeries({ color: '#fb8500', lineWidth: 1, priceLineVisible: false });
+          container._series.ema26 = ema26Series;
+        }
         ema9Series.setData(ema9);
         ema12Series.setData(ema12);
         ema26Series.setData(ema26);
+
+        // N/B Wave Prediction Series (미래 zone 예측선)
+        let nbPredictionSeries = chart._nbPredictionSeries;
+        if (!nbPredictionSeries) {
+          nbPredictionSeries = chart.addBaselineSeries({
+            baseValue: { type: 'price', price: 0.5 },
+            topLineColor: 'rgba(14, 203, 129, 0.3)',
+            topFillColor1: 'rgba(14, 203, 129, 0.15)',
+            topFillColor2: 'rgba(14, 203, 129, 0.05)',
+            bottomLineColor: 'rgba(246, 70, 93, 0.3)',
+            bottomFillColor1: 'rgba(246, 70, 93, 0.15)',
+            bottomFillColor2: 'rgba(246, 70, 93, 0.05)',
+            lineWidth: 2,
+            lineStyle: 2,  // Dashed line
+            priceLineVisible: false,
+            lastValueVisible: false
+          });
+          chart._nbPredictionSeries = nbPredictionSeries;
+        }
+        // 초기에는 비워둠 (updateNBPrediction 호출 시 업데이트)
+        nbPredictionSeries.setData([]);
 
         // EMA/Trust legend (top-left)
         const legendId = 'chartLegendBox';
@@ -1471,7 +1652,42 @@ const FlowDashboard = (() => {
           <div>ML Trust: ${mlTrustTxt}</div>
         `;
 
-        chart.timeScale().fitContent();
+        // Restore saved chart view BEFORE fitContent (마우스 조정 뷰 복한 - 우선순위)
+        let viewRestored = false;
+        try {
+          const savedView = localStorage.getItem('chartViewRange');
+          if (savedView && container._series.candle) {
+            const { from, to } = JSON.parse(savedView);
+            if (typeof from === 'number' && typeof to === 'number' && from < to) {
+              // requestAnimationFrame으로 렌더링 완료 후 복원 (더 안정적)
+              requestAnimationFrame(() => {
+                try {
+                  chart.timeScale().setVisibleRange({ from, to });
+                  viewRestored = true;
+                  console.log('🔄 초기 차트 뷰 복원:', { from, to });
+                } catch(e) {
+                  console.debug('Initial view restore error:', e?.message);
+                }
+              });
+              viewRestored = true;
+            }
+          }
+        } catch(e) {
+          console.debug('Initial view restore error:', e?.message);
+        }
+        
+        // fitContent() only if no saved view (처음 로드하거나 저장된 뷰가 없을 때만)
+        if (!viewRestored) {
+          chart.timeScale().fitContent();
+          // 기본값으로 살짝 왼쪽으로 이동 (우측 여백 확보)
+          setTimeout(() => {
+            try {
+              chart.timeScale().scrollToPosition(-100, false); // 왼쪽으로 100바 이동
+            } catch(e) {
+              console.debug('Chart scroll adjustment error:', e?.message);
+            }
+          }, 100);
+        }
 
         // Zone badge overlay (BLUE/ORANGE 식별)
         const zoneBadgeId = 'chartZoneBadge';
@@ -1541,8 +1757,85 @@ const FlowDashboard = (() => {
           : '';
         info.innerHTML = `N/B: ${zoneLabel} | Trust: ${trustTxt}<br>r: ${rTxt}<br>MAX: ${maxTxt} | MIN: ${minTxt}<br>ML: ${mlZoneLabel} | Trust: ${mlTrustTxtInfo}${mlPctTxtInfo ? `<br>${mlPctTxtInfo}` : ''}`;
         
-        // Store chart instance for cleanup
+        // Store chart instance for reuse
         container._chartInstance = chart;
+        
+        // N/B Wave 예측 업데이트 함수
+        window.updateNBPrediction = async function() {
+          try {
+            // 항상 활성화 상태
+            if (!window.nbPredictionEnabled) {
+              window.nbPredictionEnabled = true;
+            }
+            
+            const interval = state.selectedInterval;
+            if (!interval) return;
+            
+            // 현재 NB Wave 데이터 가져오기
+            const nbWaveData = chart._nbWaveSeries?.data?.() || [];
+            if (!nbWaveData || nbWaveData.length < 30) {
+              console.log('[NB Prediction] NB Wave 데이터 부족:', nbWaveData.length);
+              return;
+            }
+            
+            const lastTime = nbWaveData[nbWaveData.length - 1].time;
+            const timeStep = nbWaveData[1].time - nbWaveData[0].time;
+            
+            // LSTM V3 API 호출 (딥러닝 예측)
+            const response = await fetch('/api/ml/rating/v3/predict', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                interval: interval,
+                sequence_count: 30
+              })
+            });
+            
+            if (!response.ok) {
+              console.warn('[NB Prediction] API 오류:', response.status);
+              return;
+            }
+            
+            const result = await response.json();
+            if (!result.ok || !result.predictions || result.predictions.length === 0) {
+              console.warn('[NB Prediction] 예측 실패:', result.error);
+              return;
+            }
+            
+            // 예측 데이터 시각화
+            const predictionData = result.predictions.map((pred, i) => ({
+              time: lastTime + (timeStep * (i + 1)),
+              value: pred.nb_value || 0.5  // 서버에서 계산한 NB value
+            }));
+            
+            if (chart._nbPredictionSeries && predictionData.length > 0) {
+              chart._nbPredictionSeries.setData(predictionData);
+              
+              const blueCount = result.predictions.filter(p => p.zone_flag > 0).length;
+              const orangeCount = result.predictions.filter(p => p.zone_flag < 0).length;
+              
+              console.log(`[NB Prediction] ✓ 딥러닝 예측 완료`);
+              console.log(`  Zone: BLUE ${blueCount}개, ORANGE ${orangeCount}개`);
+            }
+            
+          } catch (err) {
+            console.error('[NB Prediction] 오류:', err);
+          }
+        };
+        
+        // 초기 예측 업데이트 (항상 실행)
+        setTimeout(() => window.updateNBPrediction(), 1000);
+        
+        // Save chart view on user interaction (마우스 조정 시 자동 저장)
+        const saveChartView = () => {
+          try {
+            const range = chart.timeScale().getVisibleRange();
+            if (range && range.from && range.to) {
+              localStorage.setItem('chartViewRange', JSON.stringify({ from: range.from, to: range.to }));
+            }
+          } catch(e) { /* ignore */ }
+        };
+        chart.timeScale().subscribeVisibleLogicalRangeChange(saveChartView);
         
         console.log('✅ Candlestick chart rendered with', candleData.length, 'candles');
       } catch (error) {
@@ -1917,6 +2210,22 @@ const FlowDashboard = (() => {
       return await resp.json();
     },
 
+    // NB Wave OHLCV: 상세 wave 데이터 (차트 baseline에 사용)
+    async getNbWaveOhlcv(interval, count = 300, window = 50) {
+      const url = withApiBase(`/api/nb-wave-ohlcv?timeframe=${encodeURIComponent(interval)}&count=${count}&window=${window}`);
+      console.log('🌊 NB Wave OHLCV API 호출:', url);
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const len = Array.isArray(data?.wave_data) ? data.wave_data.length : 0;
+        console.log('🌊 NB Wave OHLCV 응답:', { ok: data?.ok, base: data?.base, len });
+        return data;
+      } catch (e) {
+        console.error('🔴 NB Wave OHLCV API 오류:', e?.message);
+        return { ok: false, error: e?.message };
+      }
+    },
+
     // NBverse: 특정 N/B 값(max/min)으로 저장 카드 로드
     async loadNbverseByNb(nbValue, type = 'max', eps = 1e-6) {
       const url = withApiBase(`/api/nbverse/load_by_nb?nb_value=${encodeURIComponent(nbValue)}&type=${encodeURIComponent(type)}&eps=${encodeURIComponent(eps)}`);
@@ -2078,9 +2387,30 @@ const FlowDashboard = (() => {
             console.warn('Zone chart render in Step 3 failed:', e?.message);
           }
           
+          // Stop previous polling to prevent memory leak when interval changes
+          stopLivePricePolling();
+          
           // Chart status
           $('#chartStatus').text(state.selectedInterval);
           $('#chartDetail').text(`차트 데이터 준비 중...`);
+
+          // Fetch NB Wave OHLCV once here and cache for Step 4 reuse
+          try {
+            const nbWaveDetail = await API.getNbWaveOhlcv(state.selectedInterval, 300, 50);
+            if (nbWaveDetail && nbWaveDetail.ok && Array.isArray(nbWaveDetail.wave_data) && nbWaveDetail.wave_data.length > 0) {
+              state.nbWaveCached = nbWaveDetail; // { base, wave_data, summary? }
+              console.log('💾 Step 3: Cached NB Wave OHLCV for reuse in Step 4:', {
+                base: nbWaveDetail.base,
+                len: nbWaveDetail.wave_data.length
+              });
+            } else {
+              console.warn('⚠️ Step 3: NB Wave OHLCV not ok or empty, will fallback in Step 4');
+              state.nbWaveCached = null;
+            }
+          } catch (e) {
+            console.warn('⚠️ Step 3: NB Wave OHLCV fetch failed:', e?.message);
+            state.nbWaveCached = null;
+          }
           
           return { success: true, currentZone, nbTrust };
         } else {
@@ -2435,6 +2765,363 @@ const FlowDashboard = (() => {
   };
 
   // ============================================================================
+  // Auto Buy Module (BLUE-only gating, countdown + progress UI)
+  // ============================================================================
+  const AutoBuy = {
+    running: false,
+    timerId: null,
+    startTime: null,
+    durationMs: 0,
+    initialized: false, // 초기화 여부 플래그
+    elements: {
+      toggleBtn: null,
+      statusBadge: null,
+      intervalSel: null,
+      amountInput: null,
+      blueOnlyChk: null,
+      progressTrack: null,
+      progressBar: null,
+      countdownLabel: null,
+    },
+
+    bindUI() {
+      // 이미 초기화되었으면 건너뜀 (중복 방지)
+      if (this.initialized) {
+        console.log('⚠️ Auto Buy already initialized, skipping bindUI');
+        return;
+      }
+      
+      try {
+        this.elements.toggleBtn = document.getElementById('autoBuyToggle');
+        this.elements.statusBadge = document.getElementById('autoBuyStatus');
+        this.elements.intervalSel = document.getElementById('autoBuyInterval');
+        this.elements.amountInput = document.getElementById('autoBuyAmount');
+        this.elements.blueOnlyChk = document.getElementById('autoBuyBlueOnly');
+
+        if (!this.elements.toggleBtn) return;
+        
+        // 초기화 완료 플래그 설정
+        this.initialized = true;
+        console.log('✅ Auto Buy UI initialized');
+        
+        // localStorage에서 설정 복원
+        this.loadSettings();
+        
+        // Create progress + countdown UI lazily
+        const card = this.elements.toggleBtn.closest('.card');
+        if (card) {
+          const progWrap = document.createElement('div');
+          progWrap.style.marginTop = '8px';
+          progWrap.style.display = 'none';
+          progWrap.id = 'autoBuyUiWrap';
+
+          const track = document.createElement('div');
+          track.id = 'autoBuyProgressTrack';
+          track.style.height = '8px';
+          track.style.borderRadius = '12px';
+          track.style.background = '#0e1424';
+          track.style.border = '1px solid rgba(255,255,255,0.12)';
+          track.style.overflow = 'hidden';
+
+          const bar = document.createElement('div');
+          bar.id = 'autoBuyProgressBar';
+          bar.style.height = '100%';
+          bar.style.width = '0%';
+          bar.style.background = '#00d1ff';
+          bar.style.transition = 'width .4s ease';
+          track.appendChild(bar);
+
+          const label = document.createElement('div');
+          label.id = 'autoBuyCountdownLabel';
+          label.style.marginTop = '6px';
+          label.style.fontSize = '11px';
+          label.style.color = '#9aa8c2';
+          label.textContent = '대기';
+
+          progWrap.appendChild(track);
+          progWrap.appendChild(label);
+          card.appendChild(progWrap);
+
+          this.elements.progressTrack = track;
+          this.elements.progressBar = bar;
+          this.elements.countdownLabel = label;
+        }
+
+        this.elements.toggleBtn.addEventListener('click', () => {
+          if (this.running) this.stop(); else this.start();
+        });
+        
+        // 설정 변경 시 저장
+        this.elements.intervalSel?.addEventListener('change', () => this.saveSettings());
+        this.elements.amountInput?.addEventListener('change', () => this.saveSettings());
+        this.elements.blueOnlyChk?.addEventListener('change', () => this.saveSettings());
+        
+        // 실행 중이었으면 남은 시간으로 자동 시작
+        const wasRunning = localStorage.getItem('autoBuy_running') === 'true';
+        if (wasRunning) {
+          setTimeout(() => this.resume(), 1000); // 1초 후 남은 시간으로 재시작
+        }
+      } catch (_) {}
+    },
+    
+    loadSettings() {
+      try {
+        const interval = localStorage.getItem('autoBuy_interval');
+        const amount = localStorage.getItem('autoBuy_amount');
+        const blueOnly = localStorage.getItem('autoBuy_blueOnly');
+        
+        if (interval && this.elements.intervalSel) {
+          this.elements.intervalSel.value = interval;
+        }
+        if (amount && this.elements.amountInput) {
+          this.elements.amountInput.value = amount;
+        }
+        if (blueOnly !== null && this.elements.blueOnlyChk) {
+          this.elements.blueOnlyChk.checked = blueOnly === 'true';
+        }
+        
+        console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly });
+        
+        // 서버에서 실제 상태 가져오기
+        this.syncServerState();
+      } catch (err) {
+        console.warn('Auto Buy 설정 복원 실패:', err);
+      }
+    },
+    
+    async syncServerState() {
+      try {
+        const resp = await fetch('/api/auto-buy/status');
+        const data = await resp.json();
+        
+        if (data.ok) {
+          console.log('🔄 서버 Auto Buy 상태 동기화:', data);
+          
+          // 서버에서 enabled=true이면 자동 시작
+          if (data.enabled) {
+            console.log('✅ 서버에 Auto Buy가 ON 상태 → 타이머 복원');
+            
+            // localStorage에 저장된 시간 정보 확인
+            const savedStartTime = localStorage.getItem('autoBuy_startTime');
+            const savedDurationMs = localStorage.getItem('autoBuy_durationMs');
+            
+            if (savedStartTime && savedDurationMs && !this.running) {
+              // 저장된 타이머가 있으면 resume으로 복원
+              console.log('⏰ 저장된 타이머 정보 발견 → resume()');
+              setTimeout(() => {
+                if (!this.running) {
+                  this.resume();
+                }
+              }, 500);
+            } else if (!this.running) {
+              // 저장된 타이머가 없으면 새로 시작
+              console.log('🆕 새로운 타이머로 시작');
+              localStorage.setItem('autoBuy_running', 'true');
+              
+              setTimeout(() => {
+                if (this.elements.toggleBtn && !this.running) {
+                  this.elements.toggleBtn.click(); // 시작 버튼 클릭
+                }
+              }, 500);
+            }
+          } else {
+            console.log('ℹ️ 서버 Auto Buy는 OFF 상태');
+            
+            // 서버가 OFF면 클라이언트도 중지
+            if (this.running) {
+              this.stop();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('서버 Auto Buy 상태 동기화 실패:', err);
+      }
+    },
+    
+    saveSettings() {
+      try {
+        const interval = this.elements.intervalSel?.value || '10m';
+        const amount = this.elements.amountInput?.value || '5000';
+        const blueOnly = this.elements.blueOnlyChk?.checked ? 'true' : 'false';
+        
+        localStorage.setItem('autoBuy_interval', interval);
+        localStorage.setItem('autoBuy_amount', amount);
+        localStorage.setItem('autoBuy_blueOnly', blueOnly);
+        
+        console.log('💾 Auto Buy 설정 저장:', { interval, amount, blueOnly });
+      } catch (err) {
+        console.warn('Auto Buy 설정 저장 실패:', err);
+      }
+    },
+
+    getIntervalMs() {
+      const val = this.elements.intervalSel?.value || '10m';
+      const map = { '10m': 10 * 60 * 1000, '30m': 30 * 60 * 1000, '1h': 60 * 60 * 1000, '2h': 2 * 60 * 60 * 1000, '4h': 4 * 60 * 60 * 1000, '6h': 6 * 60 * 60 * 1000 };
+      return map[val] || (10 * 60 * 1000);
+    },
+
+    formatMmSs(ms) {
+      const sec = Math.max(0, Math.floor(ms / 1000));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    },
+
+    tick() {
+      const now = Date.now();
+      const elapsed = now - this.startTime;
+      const remain = Math.max(0, this.durationMs - elapsed);
+      const pct = Math.min(100, Math.max(0, (elapsed / this.durationMs) * 100));
+
+      if (this.elements.progressBar) this.elements.progressBar.style.width = `${pct}%`;
+      if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `다음 매수까지 ${this.formatMmSs(remain)}`;
+      if (this.elements.statusBadge) this.elements.statusBadge.textContent = 'ON';
+
+      if (remain <= 0) {
+        // Gate by BLUE-only if checked
+        const blueOnly = !!this.elements.blueOnlyChk?.checked;
+        const currentZone = (window.flowDashboardState?.currentZone) || window.ccCurrentZone || 'NONE';
+        if (!blueOnly || String(currentZone).toUpperCase() === 'BLUE') {
+          try { FlowDashboard.executeBuy(); } catch (_) {}
+          if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = '매수 실행됨';
+        } else {
+          if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = 'BLUE 아님, 건너뜀';
+        }
+        // Restart next cycle
+        this.startTime = Date.now();
+        localStorage.setItem('autoBuy_startTime', String(this.startTime));
+        localStorage.setItem('autoBuy_durationMs', String(this.durationMs));
+      }
+    },
+
+    resume() {
+      // 저장된 시간 정보 복원
+      const savedStartTime = localStorage.getItem('autoBuy_startTime');
+      const savedDurationMs = localStorage.getItem('autoBuy_durationMs');
+      
+      if (!savedStartTime || !savedDurationMs) {
+        console.log('⚠️ 저장된 시간 없음, 새로 시작');
+        this.start();
+        return;
+      }
+      
+      const startTime = Number(savedStartTime);
+      const durationMs = Number(savedDurationMs);
+      const now = Date.now();
+      const elapsed = now - startTime;
+      const remain = durationMs - elapsed;
+      
+      if (remain <= 0) {
+        console.log('⚠️ 이미 시간 지남, 새로 시작');
+        this.start();
+        return;
+      }
+      
+      // 남은 시간으로 재시작
+      this.durationMs = durationMs;
+      this.startTime = startTime;  // 원래 시작 시간 유지
+      this.running = true;
+      
+      if (this.elements.toggleBtn) this.elements.toggleBtn.textContent = '⏹️ 중지';
+      if (this.elements.statusBadge) {
+        this.elements.statusBadge.classList.remove('bg-secondary');
+        this.elements.statusBadge.classList.add('bg-success');
+        this.elements.statusBadge.textContent = 'ON';
+      }
+      const wrap = document.getElementById('autoBuyUiWrap');
+      if (wrap) wrap.style.display = 'block';
+      if (this.elements.progressBar) {
+        const pct = Math.min(100, Math.max(0, (elapsed / durationMs) * 100));
+        this.elements.progressBar.style.width = `${pct}%`;
+      }
+      if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `다음 매수까지 ${this.formatMmSs(remain)}`;
+      
+      // 기존 타이머 정리 후 새로 시작 (중복 방지)
+      if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+      this.timerId = setInterval(() => this.tick(), 1000);
+      
+      console.log('▶️ Auto Buy 재시작 (남은 시간:', this.formatMmSs(remain), ')');
+    },
+    
+    async start() {
+      if (this.running) return;
+      this.durationMs = this.getIntervalMs();
+      this.startTime = Date.now();
+      this.running = true;
+      
+      // 실행 상태 및 시간 저장
+      localStorage.setItem('autoBuy_running', 'true');
+      localStorage.setItem('autoBuy_startTime', String(this.startTime));
+      localStorage.setItem('autoBuy_durationMs', String(this.durationMs));
+      
+      if (this.elements.toggleBtn) this.elements.toggleBtn.textContent = '⏹️ 중지';
+      if (this.elements.statusBadge) {
+        this.elements.statusBadge.classList.remove('bg-secondary');
+        this.elements.statusBadge.classList.add('bg-success');
+        this.elements.statusBadge.textContent = 'ON';
+      }
+      const wrap = document.getElementById('autoBuyUiWrap');
+      if (wrap) wrap.style.display = 'block';
+      if (this.elements.progressBar) this.elements.progressBar.style.width = '0%';
+      if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `다음 매수까지 ${this.formatMmSs(this.durationMs)}`;
+      
+      // 기존 타이머 정리 후 새로 시작 (중복 방지)
+      if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+      this.timerId = setInterval(() => this.tick(), 1000);
+      
+      console.log('▶️ Auto Buy 시작');
+      
+      // 서버에 enabled=true 전송
+      try {
+        const resp = await fetch('/api/auto-buy/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true })
+        });
+        const data = await resp.json();
+        console.log('💾 서버 Auto Buy ON 저장:', data);
+      } catch (err) {
+        console.warn('서버 Auto Buy 설정 저장 실패:', err);
+      }
+    },
+
+    async stop() {
+      if (!this.running) return;
+      this.running = false;
+      
+      // 실행 상태 저장 및 시간 정보 삭제
+      localStorage.setItem('autoBuy_running', 'false');
+      localStorage.removeItem('autoBuy_startTime');
+      localStorage.removeItem('autoBuy_durationMs');
+      
+      if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+      if (this.elements.toggleBtn) this.elements.toggleBtn.textContent = '▶️ 시작';
+      if (this.elements.statusBadge) {
+        this.elements.statusBadge.classList.remove('bg-success');
+        this.elements.statusBadge.classList.add('bg-secondary');
+        this.elements.statusBadge.textContent = 'OFF';
+      }
+      const wrap = document.getElementById('autoBuyUiWrap');
+      if (wrap) wrap.style.display = 'none';
+      
+      console.log('⏹️ Auto Buy 중지');
+      
+      // 서버에 enabled=false 전송
+      try {
+        const resp = await fetch('/api/auto-buy/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false })
+        });
+        const data = await resp.json();
+        console.log('💾 서버 Auto Buy OFF 저장:', data);
+      } catch (err) {
+        console.warn('서버 Auto Buy 설정 저장 실패:', err);
+      }
+    }
+  };
+
+  // ============================================================================
   // Public Interface
   // ============================================================================
   return {
@@ -2446,6 +3133,8 @@ const FlowDashboard = (() => {
       
       // 데이터 로딩 시작 (Step 1부터 시작)
       this.initializeData();
+      // Bind Auto Buy UI
+      try { AutoBuy.bindUI(); } catch (_) {}
       
       // Auto refresh 비활성화 (10단계 자동 사이클이 있으므로 불필요)
       // setInterval(() => {
@@ -2542,7 +3231,9 @@ const FlowDashboard = (() => {
           
           if (chartData && rows.length > 0) {
             // 실제 차트 렌더링 (내부에서 state.nbWave 계산 및 저장)
-            UI.renderPriceChart(chartData);
+            // ⚠️ N/B WAVE 완료를 기다립니다
+            await UI.renderPriceChart(chartData);
+            console.log('✅ 차트 및 N/B WAVE 렌더링 완료');
             
             // 차트 렌더링 후 Step 1 zone status를 차트 wave와 동기화
             if (state.nbWave?.data?.length) {
@@ -2923,12 +3614,39 @@ const FlowDashboard = (() => {
       state.marketData = null;
       state.signalData = null;
       state.tradeData = null;
+      state.nbWaveCached = null; // Clear cached NB Wave data
       StepManager.activateStep(1);
       DataManager.refreshMarketData();
     },
 
     viewTradeHistory() {
       window.open('/api/orders', '_blank');
+    },
+
+    // Auto Buy controls
+    autoBuyStart() { try { AutoBuy.start(); } catch (_) {} },
+    autoBuyStop() { try { AutoBuy.stop(); } catch (_) {} },
+    
+    // Memory monitoring (logs every 30 seconds if memory available)
+    startMemoryMonitoring() {
+      if (!window.memoryMonitoringInterval) {
+        window.memoryMonitoringInterval = setInterval(() => {
+          try {
+            if (performance.memory) {
+              const used = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2);
+              const limit = (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2);
+              const pct = ((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100).toFixed(1);
+              console.log(`💾 Memory: ${used}MB / ${limit}MB (${pct}%)`);
+              // If memory usage exceeds 80% of limit, trigger cleanup
+              if (parseFloat(pct) > 80) {
+                console.warn('⚠️ High memory usage detected, clearing caches');
+                window.candleDataCache = (window.candleDataCache || []).slice(-200); // Keep only recent
+                window.nbWaveZonesConsole = null;
+              }
+            }
+          } catch(e) { /* memory API not available */ }
+        }, 30000); // Check every 30 seconds
+      }
     }
   };
 })();
@@ -4002,6 +4720,45 @@ async function executeSellForCard(cardIdx, price, size, market) {
 // ============================================================================
 $(document).ready(function() {
   FlowDashboard.init();
+  FlowDashboard.startMemoryMonitoring(); // Start memory monitoring to prevent leaks
+  
+  // N/B Wave 예측 항상 활성화
+  window.nbPredictionEnabled = true;
+  
+  // 자동 재훈련 시작 (30분마다)
+  setInterval(async () => {
+    try {
+      console.log('[Auto-Train] 📚 LSTM 딥러닝 재훈련 시작...');
+      const response = await fetch('/api/ml/rating/v3/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intervals: ['10m', '30m', '1h'],
+          window: 120
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.ok) {
+          console.log(`[Auto-Train] ✓ LSTM 재훈련 완료: ${result.sample_count}개 샘플`);
+          console.log(`[Auto-Train] Train Loss: ${(result.train_loss || 0).toFixed(4)}`);
+          console.log(`[Auto-Train] Test Loss: ${(result.test_loss || 0).toFixed(4)}`);
+          console.log(`[Auto-Train] Test MAE: ${(result.test_mae || 0).toFixed(4)}`);
+          
+          // 재훈련 후 예측 업데이트
+          if (window.updateNBPrediction) {
+            setTimeout(() => window.updateNBPrediction(), 1000);
+          }
+        } else {
+          console.warn('[Auto-Train] 재훈련 실패:', result.error);
+        }
+      }
+    } catch (err) {
+      console.error('[Auto-Train] 오류:', err);
+    }
+  }, 30 * 60 * 1000);  // 30분마다
+  
   try {
     $('#ccBuy').on('click', () => FlowDashboard.executeBuy());
   } catch(_) {}

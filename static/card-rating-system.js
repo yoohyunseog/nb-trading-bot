@@ -1,22 +1,28 @@
 /**
  * 🎴 Card Rating System
- * N/B 값(가격, 거래량, 거래대금)을 받아서 카드 등급을 계산
+ * N/B MAX + MIN 합계로 카드 등급을 계산
+ * - MAX + MIN 합계가 클수록 등급 높음
+ * - MAX < MIN일 때: 등급 낮음 (MIN 쪽에 치우침)
+ * - MIN < MAX일 때: 등급 높음 (MAX 쪽에 치우침)
  */
 
 const CardRatingSystem = (() => {
-  // N/B 범위 데이터
-  const nbRanges = {
-    price: { max: 3.8940408163, min: 27.2533061224 },
-    volume: { max: 4.0633469388, min: 7.7726448980 },
-    amount: { max: 4.4935836735, min: 7.9653551020 }
-  };
-
   /**
-   * 정규화 (0-1 범위로 변환)
+   * MAX + MIN 합계를 점수로 변환 (0-100)
+   * - 합계가 크면 높은 점수
+   * - MAX와 MIN의 크기 관계를 반영
    */
-  function normalize(value, min, max) {
-    if (max === min) return 0.5;
-    return Math.max(0, Math.min(1, (value - min) / (max - min)));
+  function calculateScore(max, min) {
+    const sum = max + min;
+    const ratio = max > min ? (max / (min || 1)) : 0.5; // MAX > MIN이면 보너스
+    
+    // 합계 기반 점수 (0-100)
+    const baseScore = Math.min(100, (sum / 100) * 50);
+    
+    // MAX/MIN 비율 보너스 (MAX > MIN이면 +점수)
+    const ratioBonus = ratio > 1 ? Math.min(50, (ratio - 1) * 25) : -20;
+    
+    return Math.max(0, Math.min(100, baseScore + ratioBonus));
   }
 
   /**
@@ -42,21 +48,29 @@ const CardRatingSystem = (() => {
   }
 
   /**
-   * 카드 등급 계산 (가격, 거래량, 거래대금 기반)
-   * @param {number} priceNB - 가격 N/B 값
-   * @param {number} volumeNB - 거래량 N/B 값
-   * @param {number} amountNB - 거래대금 N/B 값
+   * 카드 등급 계산 (N/B MAX + MIN 기반)
+   * @param {object} priceNB - { max, min }
+   * @param {object} volumeNB - { max, min }
+   * @param {object} amountNB - { max, min }
    * @param {string} zone - 'BLUE' 또는 'ORANGE'
    * @returns {object} { grade, score, color, emoji, details }
    */
   function calculateCardRating(priceNB, volumeNB, amountNB, zone = 'BLUE') {
-    // 정규화
-    const priceScore = normalize(priceNB, nbRanges.price.min, nbRanges.price.max);
-    const volumeScore = normalize(volumeNB, nbRanges.volume.min, nbRanges.volume.max);
-    const amountScore = normalize(amountNB, nbRanges.amount.min, nbRanges.amount.max);
+    // N/B 객체에서 max, min 추출
+    const pMax = priceNB?.max || 0;
+    const pMin = priceNB?.min || 0;
+    const vMax = volumeNB?.max || 0;
+    const vMin = volumeNB?.min || 0;
+    const aMax = amountNB?.max || 0;
+    const aMin = amountNB?.min || 0;
 
-    // 평균 점수 (0-100)
-    const avgScore = (priceScore + volumeScore + amountScore) / 3 * 100;
+    // 각 항목별 점수 계산
+    const priceScore = calculateScore(pMax, pMin);
+    const volumeScore = calculateScore(vMax, vMin);
+    const amountScore = calculateScore(aMax, aMin);
+
+    // 평균 점수
+    const avgScore = (priceScore + volumeScore + amountScore) / 3;
 
     // Zone 보너스/페널티
     let finalScore = avgScore;
@@ -78,10 +92,15 @@ const CardRatingSystem = (() => {
       zone: zone,
       zoneEmoji: zone === 'BLUE' ? '🔵' : '🟠',
       details: {
-        price: Math.round(priceScore * 100),
-        volume: Math.round(volumeScore * 100),
-        amount: Math.round(amountScore * 100),
-        average: Math.round(avgScore)
+        price: Math.round(priceScore),
+        volume: Math.round(volumeScore),
+        amount: Math.round(amountScore),
+        average: Math.round(avgScore),
+        sums: {
+          price: pMax + pMin,
+          volume: vMax + vMin,
+          amount: aMax + aMin
+        }
       }
     };
   }
@@ -119,8 +138,7 @@ const CardRatingSystem = (() => {
     getGrade: getGradeFromScore,
     createBadge: createRatingBadge,
     createDetails: createDetailedInfo,
-    normalize: normalize,
-    ranges: nbRanges
+    calculateScore: calculateScore
   };
 })();
 

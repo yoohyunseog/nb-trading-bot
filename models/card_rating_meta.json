@@ -1,0 +1,20 @@
+{
+  "trained_at": "2026-01-10T23:53:21.500883",
+  "train_count": 35,
+  "mae": 2.4619775819418686,
+  "feature_names": [
+    "p_max",
+    "p_min",
+    "v_max",
+    "v_min",
+    "t_max",
+    "t_min",
+    "r_price",
+    "r_vol",
+    "r_amt",
+    "avg_r",
+    "current_price",
+    "interval_hash",
+    "zone_flag"
+  ]
+}

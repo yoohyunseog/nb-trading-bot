@@ -71,13 +71,15 @@ def get_candles(market: str, candle: str, count: int = 200) -> pd.DataFrame:
             # PyUpbit uses parameter name 'ticker' not 'market'
             if candle.startswith("minute"):
                 unit = int(candle.replace("minute", ""))
-                data = pyupbit.get_ohlcv(ticker=market, interval=f"minute{unit}", count=count)
+                interval_str = f"minute{unit}"
+                data = pyupbit.get_ohlcv(ticker=market, interval=interval_str, count=count)
             else:
+                interval_str = candle
                 data = pyupbit.get_ohlcv(ticker=market, interval=candle, count=count)
             
             if data is None or data.empty:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ Empty data received, retrying... (attempt {attempt + 1}/{max_retries})")
+                    print(f"⚠️ Empty data received for {market} {interval_str} (count={count}), retrying... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(retry_delay)
                     retry_delay *= 1.5  # increase delay
                     continue

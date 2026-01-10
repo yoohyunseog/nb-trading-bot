@@ -1,0 +1,5 @@
+# LSTM 딥러닝 모델 (rating_ml_v3.py) 의존성
+tensorflow>=2.10.0
+keras>=2.10.0
+scikit-learn>=1.0.0
+numpy>=1.21.0
