@@ -12,10 +12,14 @@
 - **트레이딩 목표**: 1억원 달성
 - **전략**: N/B 지표 기반 자동화 알고리즘 트레이딩
 - **방식**: AI/ML 모델을 활용한 BLUE/ORANGE 존 분석 및 매매 신호 생성
-- **시장**: 바이낸스 암호화폐 거래소
+- **시장**: 
+  - **거래소**: 업비트 (Upbit) - 대한민국 1위 암호화폐 거래소
+  - **지역**: Korean Market (한국 시장)
+  - **통화**: KRW (원화) 마켓
+  - **특징**: 24시간 실시간 거래, 다양한 알트코인 지원
 
 ## 🏷️ 태그
-`n/b` `trading-bot` `cryptocurrency` `binance` `machine-learning` `ai-trading` `technical-analysis` `ohlcv` `bit-calculation` `zone-analysis` `blue-zone` `orange-zone` `nb-indicator` `algorithmic-trading` `python` `tensorflow` `real-time-trading` `crypto-bot` `automated-trading` `quantitative-analysis`
+`n/b` `trading-bot` `cryptocurrency` `upbit` `korean-market` `krw` `machine-learning` `ai-trading` `technical-analysis` `ohlcv` `bit-calculation` `zone-analysis` `blue-zone` `orange-zone` `nb-indicator` `algorithmic-trading` `python` `tensorflow` `real-time-trading` `crypto-bot` `automated-trading` `quantitative-analysis` `korea` `한국-암호화폐`
 
 ## 🔧 주요 변경사항
 
