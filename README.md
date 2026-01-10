@@ -2,6 +2,13 @@
 
 AI-powered cryptocurrency trading bot with NBverse card system and multi-timeframe analysis.
 
+## 📊 Project Information
+
+- **Server**: https://참소식.com
+- **Manager**: Server Administrator
+- **Status**: 수익화 모듈 개발 중
+- **Target**: ₩100,000,000 (1억원)
+
 ## Features
 
 - **ML Trust Analysis**: Machine learning-based confidence scoring
