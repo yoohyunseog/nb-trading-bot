@@ -250,16 +250,16 @@
 
             <div class="row g-2">
               <div class="col-6">
-                <label class="form-label" style="font-size:11px; color:#9aa8c2;">주기</label>
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">주기 (초)</label>
                 <select id="autoBuyInterval" class="form-select form-select-sm">
-                  <option value="1m">1분</option>
-                  <option value="3m">3분</option>
-                  <option value="5m">5분</option>
-                  <option value="10m">10분</option>
-                  <option value="15m">15분</option>
-                  <option value="30m">30분</option>
-                  <option value="1h">1시간</option>
-                  <option value="1d">일봉</option>
+                  <option value="60">60초 (1분)</option>
+                  <option value="180">180초 (3분)</option>
+                  <option value="300">300초 (5분)</option>
+                  <option value="600">600초 (10분)</option>
+                  <option value="900">900초 (15분)</option>
+                  <option value="1800">1800초 (30분)</option>
+                  <option value="3600">3600초 (1시간)</option>
+                  <option value="86400">86400초 (일봉)</option>
                 </select>
               </div>
               <div class="col-6">
@@ -302,10 +302,30 @@
                     <small class="text-muted" style="font-size:9px; display:block; margin-left:24px;">현재 보유 카드보다 높은 등급만</small>
                   </div>
 
-                  <div class="form-check mb-0">
+                  <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="autoBuyBlueCardOnly" checked />
                     <label class="form-check-label" for="autoBuyBlueCardOnly" style="font-size:11px; color:#d9e2f3;">💙 Blue Card만 매수</label>
                     <small class="text-muted" style="font-size:9px; display:block; margin-left:24px;">Blue(+강화)만 매수, Orange(-강화) 제외</small>
+                  </div>
+
+                  <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1);">
+                    <label class="form-label" style="font-size:10px; color:#9aa8c2; margin-bottom:6px;">대기 시간 후 주기적 매수 (초)</label>
+                    <select id="autoBuyWaitTime" class="form-select form-select-sm">
+                      <option value="0">즉시 (0초)</option>
+                      <option value="5">5초</option>
+                      <option value="10">10초</option>
+                      <option value="15">15초</option>
+                      <option value="30">30초</option>
+                      <option value="60">60초 (1분)</option>
+                      <option value="120">120초 (2분)</option>
+                      <option value="300">300초 (5분)</option>
+                      <option value="600">600초 (10분)</option>
+                      <option value="1800">1800초 (30분)</option>
+                      <option value="3600">3600초 (1시간)</option>
+                      <option value="7200">7200초 (2시간)</option>
+                      <option value="14400">14400초 (4시간)</option>
+                    </select>
+                    <small class="text-muted" style="font-size:9px; display:block; margin-top:4px;">대기 후 이 주기로 매수 시도 (성공시 다시 대기)</small>
                   </div>
                 </div>
               </div>
@@ -313,6 +333,33 @@
 
             <div class="d-flex align-items-center justify-content-between mt-2">
               <button id="autoBuyToggle" class="btn btn-sm btn-outline-info w-100">▶️ 시작</button>
+            </div>
+
+            <!-- 프로그레스바 -->
+            <div class="mt-2">
+              <!-- 대기 시간 프로그레스바 -->
+              <div id="abWaitPhase" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                  <span id="abWaitStatusText" style="color:#ffb703; font-weight:600;">⏳ 대기 중...</span>
+                  <span id="abWaitTimeText" style="color:#9aa8c2;">-</span>
+                </div>
+                <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                  <div id="abWaitProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#ffb703,#ffa500); transition:width .25s linear"></div>
+                  <div id="abWaitProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                </div>
+              </div>
+              
+              <!-- 매수 단계 프로그레스바 -->
+              <div id="abBuyingPhase" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                  <span id="abBuyingStatusText" style="color:#0ecb81; font-weight:600;">🔄 매수 시도 중...</span>
+                  <span id="abNextBuyText" style="color:#9aa8c2;">-</span>
+                </div>
+                <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                  <div id="abProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#0ecb81,#00d1ff); transition:width .25s linear"></div>
+                  <div id="abProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                </div>
+              </div>
             </div>
 
             <!-- Auto Buy 로그 -->
@@ -648,6 +695,21 @@
                   <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
                     <div class="text-muted" style="font-size: 10px;">수익률</div>
                     <div id="profitRate" style="font-size: 14px; font-weight: 700;">0%</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">평균 수익</div>
+                    <div id="avgProfit" style="font-size: 14px; font-weight: 700;">0 KRW</div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div style="background: rgba(14,20,36,0.6); border-radius: 6px; padding: 10px;">
+                    <div class="text-muted" style="font-size: 10px;">평균 수익률</div>
+                    <div id="avgProfitRate" style="font-size: 14px; font-weight: 700;">0%</div>
                   </div>
                 </div>
               </div>

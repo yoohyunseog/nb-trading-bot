@@ -1,3 +1,8 @@
+// ============================================================================
+// GLOBAL VARIABLES & HELPERS (FlowDashboard 외부 - 외부 접근 가능)
+// ============================================================================
+let ccLastNbversePath = null; // 마지막 저장된 NBverse 경로
+
 const FlowDashboard = (() => {
   /**
    * Flow Dashboard Module
@@ -79,6 +84,10 @@ const FlowDashboard = (() => {
   
   // Expose StateManager globally
   window.stateManager = stateManager;
+
+  // ✅ 자동저장 함수 및 스냅샷 함수 (나중에 init에서 구현하여 외부에 노출)
+  let autoSaveCurrentCardFn = null;
+  let addCurrentWinSnapshotFn = null;
 
   const state = window.flowDashboardState || {
     currentStep: 1,
@@ -2493,11 +2502,17 @@ const FlowDashboard = (() => {
         $('#ccSaveHint').text(saveMeta ? '✅ 완료' : '⏳ 대기');
 
         // Auto-save to NBverse (nbdatabase)
-        autoSaveCurrentCard();
+        if (typeof window.autoSaveCurrentCard === 'function') {
+          window.autoSaveCurrentCard();
+        }
 
         // Win% snapshot (카드 등급/존 기록)
         setTimeout(() => {
-          try { addCurrentWinSnapshot(interval); } catch (e) { console.warn('win snapshot err', e?.message); }
+          try { 
+            if (typeof window.addCurrentWinSnapshot === 'function') {
+              window.addCurrentWinSnapshot(interval);
+            }
+          } catch (e) { console.warn('win snapshot err', e?.message); }
         }, 0);
 
         console.log('✅ Current card rendered from NBverse:', chart.length, 'candles');
@@ -3263,6 +3278,13 @@ const FlowDashboard = (() => {
     durationMs: 0,
     initialized: false, // 초기화 여부 플래그
     serverStateSynced: false, // 서버 상태 동기화 여부 플래그
+    lastCheckedCardId: null, // 마지막으로 체크한 카드 ID (대기 시간 모드 중복 방지)
+    
+    // ===== 상태 머신 (WAIT -> BUYING -> WAIT) =====
+    phase: 'IDLE', // 'IDLE', 'WAIT', 'BUYING'
+    waitStartTime: null, // 대기 시간 시작 시간
+    waitDurationMs: 0, // 대기 시간 (밀리초)
+    buyingIntervalMs: 0, // 매수 시도 간격
     elements: {
       toggleBtn: null,
       statusBadge: null,
@@ -3290,7 +3312,17 @@ const FlowDashboard = (() => {
         this.elements.noDuplicateChk = document.getElementById('autoBuyNoDuplicate');
         this.elements.higherGradeChk = document.getElementById('autoBuyHigherGrade');
         this.elements.blueCardOnlyChk = document.getElementById('autoBuyBlueCardOnly');
+        this.elements.modeIntervalChk = document.getElementById('autoBuyModeInterval');
+        this.elements.modeWaitChk = document.getElementById('autoBuyModeWait');
+        this.elements.waitTimeInput = document.getElementById('autoBuyWaitTime');
         this.elements.logContainer = document.getElementById('autoBuyLogContainer');
+        
+        // ===== 새로운 프로그레스바 요소들 =====
+        this.elements.waitPhaseEl = document.getElementById('abWaitPhase');
+        this.elements.buyingPhaseEl = document.getElementById('abBuyingPhase');
+        this.elements.waitProgressBar = document.getElementById('abWaitProgressBar');
+        this.elements.progressBar = document.getElementById('abProgressBar');
+        this.elements.countdownLabel = document.getElementById('abNextText');
 
         if (!this.elements.toggleBtn) return;
         
@@ -3361,12 +3393,28 @@ const FlowDashboard = (() => {
           if (this.running) this.stop(); else this.start();
         });
         
+        // 매수 방식 중복 방지 (라디오 버튼처럼 작동)
+        this.elements.modeIntervalChk?.addEventListener('change', () => {
+          if (this.elements.modeIntervalChk.checked) {
+            this.elements.modeWaitChk.checked = false;
+          }
+          this.saveSettings();
+        });
+        
+        this.elements.modeWaitChk?.addEventListener('change', () => {
+          if (this.elements.modeWaitChk.checked) {
+            this.elements.modeIntervalChk.checked = false;
+          }
+          this.saveSettings();
+        });
+        
         // 설정 변경 시 저장
         this.elements.intervalSel?.addEventListener('change', () => this.saveSettings());
         this.elements.amountInput?.addEventListener('change', () => this.saveSettings());
         this.elements.blueOnlyChk?.addEventListener('change', () => this.saveSettings());
         this.elements.noDuplicateChk?.addEventListener('change', () => this.saveSettings());
         this.elements.higherGradeChk?.addEventListener('change', () => this.saveSettings());
+        this.elements.waitTimeInput?.addEventListener('change', () => this.saveSettings());
         
         // 실행 중이었으면 남은 시간으로 자동 시작
         const wasRunning = localStorage.getItem('autoBuy_running') === 'true';
@@ -3384,6 +3432,9 @@ const FlowDashboard = (() => {
         const noDuplicate = localStorage.getItem('autoBuy_noDuplicate');
         const higherGrade = localStorage.getItem('autoBuy_higherGrade');
         const blueCardOnly = localStorage.getItem('autoBuy_blueCardOnly');
+        const modeInterval = localStorage.getItem('autoBuy_modeInterval');
+        const modeWait = localStorage.getItem('autoBuy_modeWait');
+        const waitTime = localStorage.getItem('autoBuy_waitTime');
         
         if (interval && this.elements.intervalSel) {
           this.elements.intervalSel.value = interval;
@@ -3403,8 +3454,17 @@ const FlowDashboard = (() => {
         if (blueCardOnly !== null && this.elements.blueCardOnlyChk) {
           this.elements.blueCardOnlyChk.checked = blueCardOnly !== 'false';
         }
+        if (modeInterval !== null && this.elements.modeIntervalChk) {
+          this.elements.modeIntervalChk.checked = modeInterval !== 'false';
+        }
+        if (modeWait !== null && this.elements.modeWaitChk) {
+          this.elements.modeWaitChk.checked = modeWait === 'true';
+        }
+        if (waitTime && this.elements.waitTimeInput) {
+          this.elements.waitTimeInput.value = waitTime;
+        }
         
-        console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly });
+        console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime });
         
         // 서버에서 실제 상태 가져오기 (최초 1회만)
         if (!this.serverStateSynced) {
@@ -3460,12 +3520,15 @@ const FlowDashboard = (() => {
     
     saveSettings() {
       try {
-        const interval = this.elements.intervalSel?.value || '10m';
+        const interval = this.elements.intervalSel?.value || '600';
         const amount = this.elements.amountInput?.value || '5000';
         const blueOnly = this.elements.blueOnlyChk?.checked ? 'true' : 'false';
         const noDuplicate = this.elements.noDuplicateChk?.checked ? 'true' : 'false';
         const higherGrade = this.elements.higherGradeChk?.checked ? 'true' : 'false';
         const blueCardOnly = this.elements.blueCardOnlyChk?.checked ? 'true' : 'false';
+        const modeInterval = this.elements.modeIntervalChk?.checked ? 'true' : 'false';
+        const modeWait = this.elements.modeWaitChk?.checked ? 'true' : 'false';
+        const waitTime = this.elements.waitTimeInput?.value || '0';
         
         localStorage.setItem('autoBuy_interval', interval);
         localStorage.setItem('autoBuy_amount', amount);
@@ -3473,27 +3536,21 @@ const FlowDashboard = (() => {
         localStorage.setItem('autoBuy_noDuplicate', noDuplicate);
         localStorage.setItem('autoBuy_higherGrade', higherGrade);
         localStorage.setItem('autoBuy_blueCardOnly', blueCardOnly);
+        localStorage.setItem('autoBuy_modeInterval', modeInterval);
+        localStorage.setItem('autoBuy_modeWait', modeWait);
+        localStorage.setItem('autoBuy_waitTime', waitTime);
         
-        console.log('💾 Auto Buy 설정 저장:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly });
+        console.log('💾 Auto Buy 설정 저장:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime });
       } catch (err) {
         console.warn('Auto Buy 설정 저장 실패:', err);
       }
     },
 
     getIntervalMs() {
-      const val = this.elements.intervalSel?.value || '10m';
-      const map = {
-        '10s': 10 * 1000,
-        '30s': 30 * 1000,
-        '1m': 60 * 1000,
-        '10m': 10 * 60 * 1000,
-        '30m': 30 * 60 * 1000,
-        '1h': 60 * 60 * 1000,
-        '2h': 2 * 60 * 60 * 1000,
-        '4h': 4 * 60 * 60 * 1000,
-        '6h': 6 * 60 * 60 * 1000
-      };
-      return map[val] || (10 * 60 * 1000);
+      const val = this.elements.intervalSel?.value || '600';
+      // val은 이제 초 단위의 숫자 문자열 (예: "60", "180", "600")
+      const seconds = parseInt(val, 10) || 600;
+      return seconds * 1000; // 밀리초로 변환
     },
 
     formatMmSs(ms) {
@@ -3555,188 +3612,259 @@ const FlowDashboard = (() => {
 
     tick() {
       const now = Date.now();
-      const elapsed = now - this.startTime;
-      const remain = Math.max(0, this.durationMs - elapsed);
-      const pct = Math.min(100, Math.max(0, (elapsed / this.durationMs) * 100));
-
-      if (this.elements.progressBar) this.elements.progressBar.style.width = `${pct}%`;
-      if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `다음 매수까지 ${this.formatMmSs(remain)}`;
+      
+      // phase가 없으면 IDLE
+      if (this.phase === 'IDLE' || !this.running) {
+        return;
+      }
+      
+      const intervalSec = parseInt(this.elements.intervalSel?.value || '600', 10);
+      const waitTimeSec = parseInt(this.elements.waitTimeInput?.value || '0', 10);
+      
+      // ===== WAIT 단계: 대기 시간 진행 =====
+      if (this.phase === 'WAIT') {
+        const elapsed = now - this.waitStartTime;
+        const remain = Math.max(0, this.waitDurationMs - elapsed);
+        const pct = Math.min(100, (elapsed / this.waitDurationMs) * 100);
+        
+        // UI 업데이트 (대기 프로그레스바)
+        const waitPhaseEl = document.getElementById('abWaitPhase');
+        if (waitPhaseEl) {
+          waitPhaseEl.style.display = 'block';
+          const bar = document.getElementById('abWaitProgressBar');
+          if (bar) bar.style.width = `${pct}%`;
+          const text = document.getElementById('abWaitProgressText');
+          if (text) text.textContent = this.formatMmSs(remain);
+        }
+        const buyingPhaseEl = document.getElementById('abBuyingPhase');
+        if (buyingPhaseEl) buyingPhaseEl.style.display = 'none';
+        
+        // 대기 시간 완료 → BUYING 단계로 전환
+        if (remain <= 0) {
+          console.log('✅ 대기 시간 완료 → BUYING 단계로 전환');
+          this.phase = 'BUYING';
+          this.lastCheckedCardId = null; // 카드 ID 리셋 (중복 체크 초기화)
+          this.startTime = now;
+          this.checkAndBuy('interval'); // 즉시 한번 체크
+        }
+      }
+      
+      // ===== BUYING 단계: 매수 시도 (주기적으로) =====
+      if (this.phase === 'BUYING') {
+        const elapsed = now - this.startTime;
+        const remain = Math.max(0, this.buyingIntervalMs - elapsed);
+        const pct = Math.min(100, (elapsed / this.buyingIntervalMs) * 100);
+        
+        // UI 업데이트 (매수 프로그레스바)
+        const buyingPhaseEl = document.getElementById('abBuyingPhase');
+        if (buyingPhaseEl) {
+          buyingPhaseEl.style.display = 'block';
+          const bar = document.getElementById('abProgressBar');
+          if (bar) bar.style.width = `${pct}%`;
+          const text = document.getElementById('abProgressText');
+          if (text) text.textContent = this.formatMmSs(remain);
+        }
+        const waitPhaseEl = document.getElementById('abWaitPhase');
+        if (waitPhaseEl) waitPhaseEl.style.display = 'none';
+        
+        // 매수 시도 간격 도달
+        if (remain <= 0) {
+          this.startTime = now; // 타이머 리셋
+          this.checkAndBuy('interval');
+        }
+      }
+      
       if (this.elements.statusBadge) this.elements.statusBadge.textContent = 'ON';
+    },
 
-      if (remain <= 0) {
-        // 매수 조건 체크
-        const blueOnly = !!this.elements.blueOnlyChk?.checked;
-        const noDuplicate = !!this.elements.noDuplicateChk?.checked;
-        const higherGradeOnly = !!this.elements.higherGradeChk?.checked;
-        const blueCardOnly = !!this.elements.blueCardOnlyChk?.checked;
-        const currentZone = (window.flowDashboardState?.currentZone) || window.ccCurrentZone || 'NONE';
-        const currentCard = window.ccCurrentData;
+    checkAndBuy(mode) {
+      const currentCard = window.ccCurrentData;
+      const currentCardId = currentCard?.uuid || currentCard?.id || currentCard?.coin;
+      
+      // 이전 카드와 같으면 스킵 (대기 시간 모드에서 중복 방지)
+      if (mode === 'wait' && this.lastCheckedCardId === currentCardId && currentCardId) {
+        return;
+      }
+      
+      this.lastCheckedCardId = currentCardId;
+
+      // 매수 조건 체크
+      const blueOnly = !!this.elements.blueOnlyChk?.checked;
+      const noDuplicate = !!this.elements.noDuplicateChk?.checked;
+      const higherGradeOnly = !!this.elements.higherGradeChk?.checked;
+      const blueCardOnly = !!this.elements.blueCardOnlyChk?.checked;
+      const waitTimeSec = parseInt(this.elements.waitTimeInput?.value || '0', 10);
+      const intervalSec = parseInt(this.elements.intervalSel?.value || '600', 10);
+      const currentZone = (window.flowDashboardState?.currentZone) || window.ccCurrentZone || 'NONE';
+      
+      let canBuy = true;
+      let reason = '';
+      
+      // 로그 초기화
+      const logMsgs = [];
+      logMsgs.push(`⏰ [Auto Buy 체크] ${new Date().toLocaleTimeString()}`);
+      logMsgs.push(`📅 주기: ${intervalSec}초 | ⏳ 대기시간: ${waitTimeSec}초`);
+      
+      // 카드 기본 정보
+      const cardCoin = currentCard?.coin || 'NONE';
+      const cardGrade = currentCard?.grade || currentCard?.rating || 'N/A';
+      const cardEnhance = currentCard?.enhance || 0;
+      const cardZone = currentCard?.zone || currentCard?.zoneForSign || currentCard?.nb_zone || 'N/A';
+      
+      // 가격 N/B Max 값 추출
+      const priceNbMax = currentCard?.nbMax || currentCard?.max || currentCard?.nb_price_max || 
+                        (currentCard?.card_rating?.priceMax) || 
+                        (currentCard?.nb?.price?.max) || 'N/A';
+      const priceNbMin = currentCard?.nb_price_min || 
+                        (currentCard?.card_rating?.priceMin) || 
+                        (currentCard?.nb?.price?.min) || 'N/A';
+      
+      logMsgs.push(`📋 현재 카드: ${cardCoin} | 등급: ${cardGrade}+${cardEnhance} | Zone: ${cardZone}`);
+      logMsgs.push(`📊 가격 N/B: MAX=${priceNbMax} | MIN=${priceNbMin}`);
+      logMsgs.push(`💼 보유 카드: ${Object.keys(window.autoBuyMaxMap || {}).length}장`);
+      logMsgs.push('---');
+      
+      // 조건 1: BLUE 카드만 매수 (카드의 zone 정보 기준)
+      if (blueOnly && currentCard) {
+        const cardZone = String(currentCard.zone || currentCard.zoneForSign || currentCard.nb_zone || 'NONE').toUpperCase();
+        if (cardZone !== 'BLUE') {
+          canBuy = false;
+          reason = '카드가 BLUE 아님, 건너뜀';
+          logMsgs.push(`❌ 조건1 (카드 BLUE): FAIL - 카드 zone=${cardZone}`);
+        } else {
+          logMsgs.push(`✅ 조건1 (카드 BLUE): PASS - 카드 zone=${cardZone}`);
+        }
+      } else if (blueOnly) {
+        logMsgs.push(`⊘ 조건1 (카드 BLUE): 카드 정보 없음`);
+      } else {
+        logMsgs.push(`⊘ 조건1 (카드 BLUE): 비활성화`);
+      }
+      
+      // 조건 2: 같은 N/B MAX 코인 중복 매수 방지
+      if (canBuy && noDuplicate && currentCard) {
+        const currentNbMax = currentCard.nbMax || currentCard.max;
+        let isDuplicate = false;
+        let duplicateCoins = [];
         
-        let canBuy = true;
-        let reason = '';
-        
-        // 로그 초기화
-        const logMsgs = [];
-        logMsgs.push(`⏰ [Auto Buy 체크] ${new Date().toLocaleTimeString()}`);
-        
-        // 카드 기본 정보
-        const cardCoin = currentCard?.coin || 'NONE';
-        const cardGrade = currentCard?.grade || currentCard?.rating || 'N/A';
-        const cardEnhance = currentCard?.enhance || 0;
-        const cardZone = currentCard?.zone || currentCard?.zoneForSign || currentCard?.nb_zone || 'N/A';
-        
-        // 가격 N/B Max 값 추출
-        const priceNbMax = currentCard?.nbMax || currentCard?.max || currentCard?.nb_price_max || 
-                          (currentCard?.card_rating?.priceMax) || 
-                          (currentCard?.nb?.price?.max) || 'N/A';
-        const priceNbMin = currentCard?.nb_price_min || 
-                          (currentCard?.card_rating?.priceMin) || 
-                          (currentCard?.nb?.price?.min) || 'N/A';
-        
-        logMsgs.push(`📋 현재 카드: ${cardCoin} | 등급: ${cardGrade}+${cardEnhance} | Zone: ${cardZone}`);
-        logMsgs.push(`📊 가격 N/B: MAX=${priceNbMax} | MIN=${priceNbMin}`);
-        logMsgs.push(`💼 보유 카드: ${Object.keys(window.autoBuyMaxMap || {}).length}장`);
-        logMsgs.push('---');
-        
-        // 조건 1: BLUE 카드만 매수 (카드의 zone 정보 기준)
-        if (blueOnly && currentCard) {
-          const cardZone = String(currentCard.zone || currentCard.zoneForSign || currentCard.nb_zone || 'NONE').toUpperCase();
-          if (cardZone !== 'BLUE') {
+        // 보유 중인 카드들 중 같은 N/B max 값이 있으면 매수 불가
+        for (const [coin, savedMax] of Object.entries(window.autoBuyMaxMap || {})) {
+          if (savedMax === currentNbMax) {
+            isDuplicate = true;
+            duplicateCoins.push(coin);
             canBuy = false;
-            reason = '카드가 BLUE 아님, 건너뜀';
-            logMsgs.push(`❌ 조건1 (카드 BLUE): FAIL - 카드 zone=${cardZone}`);
-          } else {
-            logMsgs.push(`✅ 조건1 (카드 BLUE): PASS - 카드 zone=${cardZone}`);
+            reason = `같은 N/B max=${currentNbMax} 카드 이미 보유중, 건너뜀`;
           }
-        } else if (blueOnly) {
-          logMsgs.push(`⊘ 조건1 (카드 BLUE): 카드 정보 없음`);
-        } else {
-          logMsgs.push(`⊘ 조건1 (카드 BLUE): 비활성화`);
         }
         
-        // 조건 2: 같은 N/B MAX 코인 중복 매수 방지
-        if (canBuy && noDuplicate && currentCard) {
-          const currentNbMax = currentCard.nbMax || currentCard.max;
-          let isDuplicate = false;
-          let duplicateCoins = [];
-          
-          // 보유 중인 카드들 중 같은 N/B max 값이 있으면 매수 불가
-          for (const [coin, savedMax] of Object.entries(window.autoBuyMaxMap || {})) {
-            if (savedMax === currentNbMax) {
-              isDuplicate = true;
-              duplicateCoins.push(coin);
-              canBuy = false;
-              reason = `같은 N/B max=${currentNbMax} 카드 이미 보유중, 건너뜀`;
-            }
-          }
-          
-          if (isDuplicate) {
-            logMsgs.push(`❌ 조건2 (N/B MAX 중복 방지): FAIL - N/B max=${currentNbMax} 보유중: ${duplicateCoins.join(', ')}`);
-          } else if (noDuplicate) {
-            logMsgs.push(`✅ 조건2 (N/B MAX 중복 방지): PASS - 같은 N/B MAX 없음`);
-          }
+        if (isDuplicate) {
+          logMsgs.push(`❌ 조건2 (N/B MAX 중복 방지): FAIL - N/B max=${currentNbMax} 보유중: ${duplicateCoins.join(', ')}`);
         } else if (noDuplicate) {
-          logMsgs.push(`⊘ 조건2 (N/B MAX 중복 방지): 카드 정보 없음`);
-        } else {
-          logMsgs.push(`⊘ 조건2 (N/B MAX 중복 방지): 비활성화`);
+          logMsgs.push(`✅ 조건2 (N/B MAX 중복 방지): PASS - 같은 N/B MAX 없음`);
         }
+      } else if (noDuplicate) {
+        logMsgs.push(`⊘ 조건2 (N/B MAX 중복 방지): 카드 정보 없음`);
+      } else {
+        logMsgs.push(`⊘ 조건2 (N/B MAX 중복 방지): 비활성화`);
+      }
+      
+      // 조건 3: 높은 등급만 매수 (등급 비교 → 같으면 강화 수치 비교)
+      if (canBuy && higherGradeOnly && currentCard) {
+        const currentGrade = currentCard.grade || currentCard.rating || 'F';
+        const currentEnhance = currentCard.enhance || 0;
+        const gradeOrder = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
+        const currentGradeIdx = gradeOrder.indexOf(currentGrade);
         
-        // 조건 3: 높은 등급만 매수 (등급 비교 → 같으면 강화 수치 비교)
-        if (canBuy && higherGradeOnly && currentCard) {
-          const currentGrade = currentCard.grade || currentCard.rating || 'F';
-          const currentEnhance = currentCard.enhance || 0;
-          const gradeOrder = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D', 'E', 'F'];
-          const currentGradeIdx = gradeOrder.indexOf(currentGrade);
-          
-          // 보유 중인 최고 등급 + 강화 찾기
-          let bestGrade = 'F';
-          let bestEnhance = 0;
-          
-          for (const [coin, gradeData] of Object.entries(window.autoBuyGradeMap || {})) {
-            const savedGrade = gradeData.grade || 'F';
-            const savedEnhance = gradeData.enhance || 0;
-            const savedGradeIdx = gradeOrder.indexOf(savedGrade);
-            const bestGradeIdx = gradeOrder.indexOf(bestGrade);
-            
-            // 등급이 더 높거나, 같은 등급이고 강화가 더 높으면
-            if (savedGradeIdx < bestGradeIdx || (savedGradeIdx === bestGradeIdx && savedEnhance > bestEnhance)) {
-              bestGrade = savedGrade;
-              bestEnhance = savedEnhance;
-            }
-          }
-          
+        // 보유 중인 최고 등급 + 강화 찾기
+        let bestGrade = 'F';
+        let bestEnhance = 0;
+        
+        for (const [coin, gradeData] of Object.entries(window.autoBuyGradeMap || {})) {
+          const savedGrade = gradeData.grade || 'F';
+          const savedEnhance = gradeData.enhance || 0;
+          const savedGradeIdx = gradeOrder.indexOf(savedGrade);
           const bestGradeIdx = gradeOrder.indexOf(bestGrade);
           
-          // 신규 카드가 최고 등급보다 낮거나, 같은 등급이고 강화가 낮으면
-          if (currentGradeIdx > bestGradeIdx || (currentGradeIdx === bestGradeIdx && currentEnhance <= bestEnhance)) {
-            canBuy = false;
-            reason = `등급 ${currentGrade}(+${currentEnhance}) <= 보유중 ${bestGrade}(+${bestEnhance}), 건너뜀`;
-            logMsgs.push(`❌ 조건3 (높은 등급): FAIL - 신규 ${currentGrade}(+${currentEnhance}) <= 보유중 ${bestGrade}(+${bestEnhance})`);
-          } else {
-            logMsgs.push(`✅ 조건3 (높은 등급): PASS - 신규 ${currentGrade}(+${currentEnhance}) > 보유중 ${bestGrade}(+${bestEnhance})`);
+          // 등급이 더 높거나, 같은 등급이고 강화가 더 높으면
+          if (savedGradeIdx < bestGradeIdx || (savedGradeIdx === bestGradeIdx && savedEnhance > bestEnhance)) {
+            bestGrade = savedGrade;
+            bestEnhance = savedEnhance;
           }
-        } else if (higherGradeOnly) {
-          logMsgs.push(`⊘ 조건3 (높은 등급): 카드 정보 없음`);
-        } else {
-          logMsgs.push(`⊘ 조건3 (높은 등급): 비활성화`);
         }
         
-        // 조건 4: Blue Card만 매수 (Orange Card 제외)
-        if (canBuy && blueCardOnly && currentCard) {
-          const cardZone = (currentCard.zone || currentCard.zoneForSign || 'NONE');
-          const isBlueCard = String(cardZone).toUpperCase() === 'BLUE';
-          
-          if (!isBlueCard) {
-            canBuy = false;
-            reason = `Orange Card(강화-), 건너뜀`;
-            logMsgs.push(`❌ 조건4 (Blue Card만): FAIL - 카드 타입=${cardZone} (Orange 카드)`);
-          } else {
-            logMsgs.push(`✅ 조건4 (Blue Card만): PASS - Blue Card(강화+)`);
-          }
-        } else if (blueCardOnly) {
-          logMsgs.push(`⊘ 조건4 (Blue Card만): 카드 정보 없음`);
+        const bestGradeIdx = gradeOrder.indexOf(bestGrade);
+        
+        // 신규 카드가 최고 등급보다 낮거나, 같은 등급이고 강화가 낮으면
+        if (currentGradeIdx > bestGradeIdx || (currentGradeIdx === bestGradeIdx && currentEnhance <= bestEnhance)) {
+          canBuy = false;
+          reason = `등급 ${currentGrade}(+${currentEnhance}) <= 보유중 ${bestGrade}(+${bestEnhance}), 건너뜀`;
+          logMsgs.push(`❌ 조건3 (높은 등급): FAIL - 신규 ${currentGrade}(+${currentEnhance}) <= 보유중 ${bestGrade}(+${bestEnhance})`);
         } else {
-          logMsgs.push(`⊘ 조건4 (Blue Card만): 비활성화`);
+          logMsgs.push(`✅ 조건3 (높은 등급): PASS - 신규 ${currentGrade}(+${currentEnhance}) > 보유중 ${bestGrade}(+${bestEnhance})`);
         }
-        
-        logMsgs.push('---');
-        
-        if (canBuy) {
-          try {
-            FlowDashboard.executeBuy();
-            // 매수 이력 기록
-            if (currentCard?.coin) {
-              window.autoBuyHistory[currentCard.coin] = now;
-              window.autoBuyMaxMap = window.autoBuyMaxMap || {};
-              window.autoBuyMaxMap[currentCard.coin] = currentCard.nbMax || currentCard.max;
-              window.autoBuyGradeMap = window.autoBuyGradeMap || {};
-              window.autoBuyGradeMap[currentCard.coin] = {
-                grade: currentCard.grade || currentCard.rating || 'F',
-                enhance: currentCard.enhance || 0
-              };
-              logMsgs.push(`✅ 매수 성공: ${currentCard.coin} (${currentCard.grade || currentCard.rating || 'F'}+${currentCard.enhance || 0}) - N/B Max: ${currentCard.nbMax || currentCard.max}`);
-            }
-            if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = '✅ 매수 실행됨';
-          } catch (e) {
-            console.error('Auto Buy 실행 오류:', e);
-            logMsgs.push(`❌ 매수 실패: ${e.message}`);
-            if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = '❌ 매수 실패';
-          }
-        } else {
-          logMsgs.push(`⏭️ 매수 스킵: ${reason}`);
-          if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `⏭️ ${reason}`;
-        }
-        
-        // 로그 출력 (콘솔 + UI)
-        const logMessage = logMsgs.join('\n');
-        console.log(logMessage);
-        this.addLog(logMessage);
-        
-        // Restart next cycle
-        this.startTime = Date.now();
-        localStorage.setItem('autoBuy_startTime', String(this.startTime));
-        localStorage.setItem('autoBuy_durationMs', String(this.durationMs));
+      } else if (higherGradeOnly) {
+        logMsgs.push(`⊘ 조건3 (높은 등급): 카드 정보 없음`);
+      } else {
+        logMsgs.push(`⊘ 조건3 (높은 등급): 비활성화`);
       }
+      
+      // 조건 4: Blue Card만 매수 (Orange Card 제외)
+      if (canBuy && blueCardOnly && currentCard) {
+        const cardZone = (currentCard.zone || currentCard.zoneForSign || 'NONE');
+        const isBlueCard = String(cardZone).toUpperCase() === 'BLUE';
+        
+        if (!isBlueCard) {
+          canBuy = false;
+          reason = `Orange Card(강화-), 건너뜀`;
+          logMsgs.push(`❌ 조건4 (Blue Card만): FAIL - 카드 타입=${cardZone} (Orange 카드)`);
+        } else {
+          logMsgs.push(`✅ 조건4 (Blue Card만): PASS - Blue Card(강화+)`);
+        }
+      } else if (blueCardOnly) {
+        logMsgs.push(`⊘ 조건4 (Blue Card만): 카드 정보 없음`);
+      } else {
+        logMsgs.push(`⊘ 조건4 (Blue Card만): 비활성화`);
+      }
+      
+      logMsgs.push('---');
+      
+      const now = Date.now();
+      
+      if (canBuy) {
+        try {
+          // 매수 실행
+          FlowDashboard.executeBuy();
+          
+          // ✅ 매수 성공 → 이력 기록
+          if (currentCard?.coin) {
+            window.autoBuyHistory[currentCard.coin] = now;
+            window.autoBuyMaxMap = window.autoBuyMaxMap || {};
+            window.autoBuyMaxMap[currentCard.coin] = currentCard.nbMax || currentCard.max;
+            window.autoBuyGradeMap = window.autoBuyGradeMap || {};
+            window.autoBuyGradeMap[currentCard.coin] = {
+              grade: currentCard.grade || currentCard.rating || 'F',
+              enhance: currentCard.enhance || 0
+            };
+            logMsgs.push(`✅ 매수 성공: ${currentCard.coin} (${currentCard.grade || currentCard.rating || 'F'}+${currentCard.enhance || 0}) - N/B Max: ${currentCard.nbMax || currentCard.max}`);
+          }
+          
+          // ===== 매수 성공 후 다시 WAIT 단계로 복귀 =====
+          logMsgs.push(`🔄 매수 성공 → 대기 단계로 복귀 (${waitTimeSec}초 대기)`);
+          this.phase = 'WAIT';
+          this.waitStartTime = now;
+          this.waitDurationMs = waitTimeSec * 1000;
+          this.lastCheckedCardId = null; // 중복 체크 초기화
+        } catch (e) {
+          console.error('Auto Buy 실행 오류:', e);
+          logMsgs.push(`❌ 매수 실패: ${e.message}`);
+        }
+      } else {
+        logMsgs.push(`⏭️ 매수 스킵: ${reason}`);
+      }
+      
+      // 로그 출력 (콘솔 + UI)
+      const logMessage = logMsgs.join('\n');
+      console.log(logMessage);
+      this.addLog(logMessage);
     },
 
     resume() {
@@ -3807,8 +3935,17 @@ const FlowDashboard = (() => {
       }
       const wrap = document.getElementById('autoBuyUiWrap');
       if (wrap) wrap.style.display = 'block';
-      if (this.elements.progressBar) this.elements.progressBar.style.width = '0%';
-      if (this.elements.countdownLabel) this.elements.countdownLabel.textContent = `다음 매수까지 ${this.formatMmSs(this.durationMs)}`;
+      
+      // 모드에 따라 다르게 초기화
+      const waitTimeSec = parseInt(this.elements.waitTimeInput?.value || '0', 10);
+      const intervalSec = parseInt(this.elements.intervalSel?.value || '600', 10);
+      
+      // ===== 항상 WAIT 단계로 시작 =====
+      this.phase = 'WAIT';
+      this.waitStartTime = Date.now();
+      this.waitDurationMs = waitTimeSec * 1000;
+      this.buyingIntervalMs = intervalSec * 1000;
+      console.log(`⏳ WAIT 단계 시작 (${waitTimeSec}초 대기 후 ${intervalSec}초 주기로 매수 시도)`);
       
       // 기존 타이머 정리 후 새로 시작 (중복 방지)
       if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
@@ -3867,6 +4004,143 @@ const FlowDashboard = (() => {
   };
 
   // ============================================================================
+  // 자동저장 및 스냅샷 함수 구현 (init에서 공개)
+  // ============================================================================
+  autoSaveCurrentCardFn = async function() {
+    if (!window.ccCurrentData) return;
+    try {
+      if (window.isAutoSaving) return;
+      window.isAutoSaving = true;
+      const savePayload = {
+        ...window.ccCurrentData,
+        market: window.ccCurrentData.market || null,
+        coin: window.ccCurrentData.market || null,
+        card_rating: window.ccCurrentRating || {},
+        nb_zone: {
+          zone: window.ccCurrentData.zone || state.currentZone || 'NONE',
+          zone_flag: window.ccCurrentData.zone_flag || 0,
+          zone_conf: window.ccCurrentData.zone_conf || 0.0,
+          dist_high: window.ccCurrentData.dist_high || 0.0,
+          dist_low: window.ccCurrentData.dist_low || 0.0
+        },
+        ml_trust: {
+          grade: document.getElementById('ccMlGrade')?.textContent || '-',
+          enhancement: document.getElementById('ccMlEnhancement')?.textContent?.replace(/\D/g, '') || '0',
+          trust_score: window.ccCurrentData.ml_trust_score
+        },
+        realized_pnl: {
+          avg: parseFloat(document.getElementById('ccRealizedAvg')?.textContent?.replace(/[^0-9.-]/g, '') || '0'),
+          max: parseFloat(document.getElementById('ccRealizedMax')?.textContent?.replace(/[^0-9.-]/g, '') || '0')
+        },
+        nb_wave: {
+          r: window.ccCurrentData.r,
+          w: window.ccCurrentData.w,
+          ema_diff: window.ccCurrentData.ema_diff,
+          pct_blue: window.ccCurrentData.pct_blue,
+          pct_orange: window.ccCurrentData.pct_orange,
+          extreme_gap: window.ccCurrentData.extreme_gap,
+          zones_array: window.nbWaveZonesConsole || [],
+          current_zone: state.currentZone,
+          nb_stats: state.nbStats || {}
+        }
+      };
+      
+      const result = await postJson('/api/nbverse/save', savePayload);
+      if (result && result.ok) {
+        ccLastNbversePath = result.paths?.[0] || result.path || ccLastNbversePath;
+        window.ccLastNbversePath = ccLastNbversePath;
+        console.log('✅ 자동 저장 완료:', savePayload.interval, `(${result.count || 1}개 경로)`);
+        const hint = document.getElementById('ccSaveHint');
+        if (hint) hint.textContent = `✅ 저장 완료 (${result.count || 1}개)`;
+        window.lastAutoSaveTs = Date.now();
+        window.isAutoSaving = false;
+        
+        if (window.ccCurrentRating && window.ccCurrentRating.enhancement) {
+          triggerAutoTraining(window.ccCurrentData, window.ccCurrentRating.enhancement);
+        }
+      } else {
+        console.warn('⚠️ 자동 저장 실패:', result?.error || 'Unknown');
+        window.isAutoSaving = false;
+      }
+    } catch (err) {
+      console.warn('⚠️ 자동 저장 에러:', err?.message);
+      window.isAutoSaving = false;
+    }
+  };
+
+  addCurrentWinSnapshotFn = function(interval) {
+    try {
+      const cc = window.ccCurrentData || window.ccCurrentData;
+      const cr = window.ccCurrentRating || window.ccCurrentRating;
+      if (!cc || !cr) {
+        console.log('⏭️ Skipping snapshot: missing cc or cr', {cc: !!cc, cr: !!cr});
+        return;
+      }
+
+      const tf = interval || state.selectedInterval || cc.interval || 'minute10';
+      const nowIso = new Date().toISOString();
+      
+      let zone = null;
+      if (Array.isArray(window.nbWaveZonesConsole) && window.nbWaveZonesConsole.length > 0) {
+        zone = window.nbWaveZonesConsole[window.nbWaveZonesConsole.length - 1];
+      }
+      if (!zone || zone === 'NONE') {
+        const nbStats = state.nbStats || {};
+        zone = nbStats.zone || state.currentZone || window.ccCurrentZone || (state.mlStats && state.mlStats.mlZone) || 'NONE';
+      }
+      if (!zone || zone === 'NONE') {
+        console.log('⏭️ Skipping snapshot: no zone detected');
+        return;
+      }
+
+      const last = winClientHistory[0];
+      if (last) {
+        const dt = Math.abs(new Date(nowIso).getTime() - new Date(last.ts).getTime());
+        if (last.tf === tf && last.code === cr.code && dt < 2000) return;
+      }
+
+      const waveR = (state.nbStats && typeof state.nbStats.rValue === 'number') ? state.nbStats.rValue : (cc.r ?? null);
+      const waveW = (state.nbStats && typeof state.nbStats.w === 'number') ? state.nbStats.w : (cc.w ?? null);
+      
+      const zoneArray = window.nbWaveZonesConsole && window.nbWaveZonesConsole.length > 0
+        ? window.nbWaveZonesConsole
+        : (state.zoneSeries && state.zoneSeries.length > 0 ? state.zoneSeries : []);
+
+      const entry = {
+        ts: nowIso,
+        tf,
+        zone,
+        code: cr.code,
+        league: cr.league,
+        group: cr.group,
+        super: !!cr.super,
+        avgPts: cr.avgPts,
+        enhancement: cr.mlEnhancement || cr.enhancement || 1,
+        mlGrade: cr.mlGrade || null,
+        mlEnhancement: cr.mlEnhancement || null,
+        price: cc.current_price || 0,
+        waveR: waveR,
+        waveW: waveW,
+        spark: Array.isArray(cc?.nb?.price?.values) ? cc.nb.price.values.slice(-30) : [],
+        zonesArray: zoneArray
+      };
+
+      winClientHistory.unshift(entry);
+      winClientHistory = winClientHistory.slice(0, 24);
+      window.winClientHistory = winClientHistory;
+
+      try {
+        if (typeof ScriptAI !== 'undefined' && ScriptAI && typeof ScriptAI.onSnapshotAdded === 'function') {
+          ScriptAI.onSnapshotAdded(entry);
+        }
+      } catch(_) {}
+      renderWinPanel();
+    } catch (e) {
+      console.warn('addCurrentWinSnapshot error:', e?.message);
+    }
+  };
+
+  // ============================================================================
   // Public Interface
   // ============================================================================
   return {
@@ -3901,6 +4175,11 @@ const FlowDashboard = (() => {
       this.initializeData();
       // Bind Auto Buy UI
       try { AutoBuy.bindUI(); } catch (_) {}
+      
+      // ✅ 자동저장 및 스냅샷 함수를 전역 범위로 노출
+      window.autoSaveCurrentCard = autoSaveCurrentCardFn;
+      window.addCurrentWinSnapshot = addCurrentWinSnapshotFn;
+      window.ccLastNbversePath = ccLastNbversePath;
       
       // Auto refresh 비활성화 (10단계 자동 사이클이 있으므로 불필요)
       // setInterval(() => {
@@ -4391,7 +4670,11 @@ const FlowDashboard = (() => {
     },
 
     saveCurrentCard() {
-      try { autoSaveCurrentCard(); } catch(e) { console.warn('manual save error:', e?.message); }
+      try { 
+        if (typeof window.autoSaveCurrentCard === 'function') {
+          window.autoSaveCurrentCard(); 
+        }
+      } catch(e) { console.warn('manual save error:', e?.message); }
     },
 
     resetFlow() {
@@ -5122,6 +5405,11 @@ async function loadSellCards9() {
     const totalProfit = Math.round(totalRealizedProfit - sellFee);
     const profitRate = avgProfitRate;
 
+    // ✅ 평균 수익 및 평균 수익률 계산
+    const avgProfit = totalRealizedCount > 0 
+      ? Math.round((totalRealizedProfit - sellFee) / totalRealizedCount) 
+      : 0;
+
     // 매도 통계 업데이트
     document.getElementById('sellCount').textContent = sellOrders.length;
     document.getElementById('sellTotalAmount').textContent = Math.round(totalSellAmount).toLocaleString() + ' KRW';
@@ -5131,6 +5419,11 @@ async function loadSellCards9() {
     document.getElementById('totalProfit').style.color = totalProfit >= 0 ? '#0ecb81' : '#f6465d';
     document.getElementById('profitRate').textContent = profitRate.toFixed(2) + '%';
     document.getElementById('profitRate').style.color = profitRate >= 0 ? '#0ecb81' : '#f6465d';
+    
+    document.getElementById('avgProfit').textContent = avgProfit.toLocaleString() + ' KRW';
+    document.getElementById('avgProfit').style.color = avgProfit >= 0 ? '#0ecb81' : '#f6465d';
+    document.getElementById('avgProfitRate').textContent = avgProfitRate.toFixed(2) + '%';
+    document.getElementById('avgProfitRate').style.color = avgProfitRate >= 0 ? '#0ecb81' : '#f6465d';
 
     updateTopSummaryBar({ buyOrders, sellOrders, currentPrice: lastPrice });
     
@@ -5646,10 +5939,10 @@ async function renderBuyOrderList(orders, interval) {
       </div>
 
       <!-- 매도 버튼 -->
-      <button onclick="executeSellForCard('${idx}', ${price}, ${size}, '${o.market || DEFAULT_MARKET}', '${o.timestamp || o.ts || Date.now()}', '${o.uuid || ""}', ${priceMax}, ${priceMin})" 
+      <button id="sellBtn_${idx}" onclick="executeSellForCard('${idx}', ${price}, ${size}, '${o.market || DEFAULT_MARKET}', '${o.timestamp || o.ts || Date.now()}', '${o.uuid || ""}', ${priceMax}, ${priceMin})" 
         style="width: 100%; background: linear-gradient(135deg, #f6465d 0%, #e63946 100%); border: none; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 13px; font-weight: 700; color: #ffffff; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(246,70,93,0.3);"
-        onmouseover="this.style.boxShadow='0 6px 16px rgba(246,70,93,0.5)'; this.style.transform='translateY(-2px)';"
-        onmouseout="this.style.boxShadow='0 4px 12px rgba(246,70,93,0.3)'; this.style.transform='translateY(0)';">
+        onmouseover="if (!this.disabled) { this.style.boxShadow='0 6px 16px rgba(246,70,93,0.5)'; this.style.transform='translateY(-2px)'; }"
+        onmouseout="if (!this.disabled) { this.style.boxShadow='0 4px 12px rgba(246,70,93,0.3)'; this.style.transform='translateY(0)'; }">
         🛍️ 매도 (${pnl >= 0 ? '수익' : '손실'})
       </button>
     </div>`;
@@ -6039,6 +6332,15 @@ function viewTradeHistory() {
 // ============================================================================
 async function executeSellForCard(cardIdx, price, size, market, timestamp, uuid, nbPriceMax, nbPriceMin) {
   try {
+    // 매도 버튼 비활성화
+    const sellBtn = document.getElementById(`sellBtn_${cardIdx}`);
+    if (sellBtn) {
+      sellBtn.disabled = true;
+      sellBtn.style.opacity = '0.5';
+      sellBtn.style.cursor = 'not-allowed';
+      sellBtn.textContent = '⏳ 매도 중...';
+    }
+
     const sellPayload = {
       market: market || DEFAULT_MARKET,
       price: price,
@@ -6070,14 +6372,38 @@ async function executeSellForCard(cardIdx, price, size, market, timestamp, uuid,
       } else {
         const statusEl = document.getElementById('systemStatus');
         if (statusEl) statusEl.textContent = `⚠️ 매도 실패: ${result.message || result.error || '알 수 없는 오류'}`;
+        // 실패 시 버튼 다시 활성화
+        const sellBtn = document.getElementById(`sellBtn_${cardIdx}`);
+        if (sellBtn) {
+          sellBtn.disabled = false;
+          sellBtn.style.opacity = '1';
+          sellBtn.style.cursor = 'pointer';
+          sellBtn.textContent = '🛍️ 매도 (수익)';
+        }
       }
     } else {
       const statusEl = document.getElementById('systemStatus');
       if (statusEl) statusEl.textContent = `❌ 매도 요청 실패 (HTTP ${res.status})`;
+      // 실패 시 버튼 다시 활성화
+      const sellBtn = document.getElementById(`sellBtn_${cardIdx}`);
+      if (sellBtn) {
+        sellBtn.disabled = false;
+        sellBtn.style.opacity = '1';
+        sellBtn.style.cursor = 'pointer';
+        sellBtn.textContent = '🛍️ 매도 (수익)';
+      }
     }
   } catch (e) {
     const statusEl = document.getElementById('systemStatus');
     if (statusEl) statusEl.textContent = `❌ 매도 중 오류: ${e?.message}`;
+    // 오류 시 버튼 다시 활성화
+    const sellBtn = document.getElementById(`sellBtn_${cardIdx}`);
+    if (sellBtn) {
+      sellBtn.disabled = false;
+      sellBtn.style.opacity = '1';
+      sellBtn.style.cursor = 'pointer';
+      sellBtn.textContent = '🛍️ 매도 (수익)';
+    }
   }
 }
 
@@ -6186,7 +6512,9 @@ $(document).ready(function() {
           const elapsed = now - last;
           if (elapsed < 60000) return; // min 60s between saves
           if (!window.ccCurrentData) return; // need current card
-          autoSaveCurrentCard();
+          if (typeof window.autoSaveCurrentCard === 'function') {
+            window.autoSaveCurrentCard();
+          }
         } catch(e) { console.debug('Autosave loop error:', e?.message); }
       }, 30000);
     }

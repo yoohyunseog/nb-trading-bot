@@ -644,16 +644,31 @@
                   
                   <!-- 프로그레스바 및 타이머 -->
                   <div class="mt-2">
-                    <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
-                      <span id="abStatusText" style="color:#00d1ff; font-weight:600;">⏸ 중지됨</span>
-                      <span id="abNextText" style="color:#9aa8c2;">-</span>
+                    <!-- 대기 시간 프로그레스바 -->
+                    <div id="abWaitPhase" style="display:none;">
+                      <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                        <span id="abStatusText" style="color:#ffb703; font-weight:600;">⏳ 대기 중...</span>
+                        <span id="abWaitTimeText" style="color:#9aa8c2;">-</span>
+                      </div>
+                      <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                        <div id="abWaitProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#ffb703,#ffa500); transition:width .25s linear"></div>
+                        <div id="abWaitProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                      </div>
                     </div>
-                    <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
-                      <div id="abProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#00d1ff,#4285f4); transition:width .25s linear"></div>
-                      <div id="abProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                    
+                    <!-- 매수 단계 프로그레스바 -->
+                    <div id="abBuyingPhase" style="display:none;">
+                      <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                        <span id="abBuyingStatusText" style="color:#0ecb81; font-weight:600;">🔄 매수 시도 중...</span>
+                        <span id="abNextBuyText" style="color:#9aa8c2;">-</span>
+                      </div>
+                      <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                        <div id="abProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#0ecb81,#00d1ff); transition:width .25s linear"></div>
+                        <div id="abProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                      </div>
                     </div>
                   </div>
-                  <div class="mt-2" style="font-size:10px; color:#9aa8c2;">💡 선택한 간격마다 BLUE Zone 체크 → 매수 실행 반복</div>
+                  <div class="mt-2" style="font-size:10px; color:#9aa8c2;">💡 대기 → 매수 시도(주기적) → 성공시 재대기</div>
                 </div>
               </div>
             </div>

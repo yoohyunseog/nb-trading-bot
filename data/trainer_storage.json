@@ -1,311 +1,11 @@
 {
   "Scout": {
-    "coins": 0.007966801273146574,
-    "entry_price": 135931000.0,
-    "last_update": 1768317532423,
-    "total_profit": -5276.673676571249,
-    "ticks": 94,
+    "coins": 0.007852661273146575,
+    "entry_price": 137215000.0,
+    "last_update": 1768323070228,
+    "total_profit": -5230.450446571248,
+    "ticks": 127,
     "trades": [
-      {
-        "ts": 1767885982716,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.007037900000000001,
-        "trade_match": {
-          "upbit_trade_id": "BUY_1767885941596",
-          "upbit_size": 0.001,
-          "upbit_price": 132389000,
-          "upbit_time": "2026-01-08T15:25:41.596Z",
-          "system_trainer": "Scout",
-          "system_action": "BUY"
-        }
-      },
-      {
-        "ts": 1767887869741,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.0060379000000000006,
-        "trade_match": {
-          "upbit_trade_id": "SELL_1767887833105",
-          "upbit_size": 0.001,
-          "upbit_price": 132309000,
-          "upbit_time": "2026-01-08T15:57:13.105Z",
-          "system_trainer": "Scout",
-          "system_action": "SELL",
-          "profit_percent": -0.12002989423781019,
-          "profit_value": -159
-        }
-      },
-      {
-        "ts": 1767888961370,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.0050379000000000005,
-        "trade_match": {
-          "upbit_trade_id": "SELL_1767888733107",
-          "upbit_size": 0.001,
-          "upbit_price": 132490000,
-          "upbit_time": "2026-01-08T16:12:13.107Z",
-          "system_trainer": "Scout",
-          "system_action": "SELL",
-          "profit_percent": -0.17104063533684458,
-          "profit_value": -227.00000000000003
-        }
-      },
-      {
-        "ts": 1767891069096,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.0040379000000000005,
-        "trade_match": {
-          "upbit_trade_id": "SELL_1767890863097",
-          "upbit_size": 0.001,
-          "upbit_price": 132536000,
-          "upbit_time": "2026-01-08T16:47:43.097Z",
-          "system_trainer": "Scout",
-          "system_action": "SELL",
-          "profit_percent": 0.25416036308623297,
-          "profit_value": 336
-        }
-      },
-      {
-        "ts": 1767891348050,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.0050379000000000005,
-        "trade_match": {
-          "upbit_trade_id": "BUY_1767891163110",
-          "upbit_size": 0.001,
-          "upbit_price": 132454000,
-          "upbit_time": "2026-01-08T16:52:43.110Z",
-          "system_trainer": "Scout",
-          "system_action": "BUY"
-        }
-      },
-      {
-        "ts": 1767892326738,
-        "action": "SELL",
-        "price": 0.0,
-        "size": 3.79e-05,
-        "profit": -5343.321696608537
-      },
-      {
-        "ts": 1767892649614,
-        "action": "BUY",
-        "price": 133112000.0,
-        "size": 3.756e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767895170802,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.006037560000000001,
-        "trade_match": {
-          "upbit_trade_id": "BUY_1767894952152",
-          "upbit_size": 0.001,
-          "upbit_price": 133401000,
-          "upbit_time": "2026-01-08T17:55:52.152Z",
-          "system_trainer": "Scout",
-          "system_action": "BUY"
-        }
-      },
-      {
-        "ts": 1767903492010,
-        "action": "REAL_TRADE",
-        "price": 161000000,
-        "size": 0.001,
-        "profit": 0.0,
-        "new_balance": 0.007037560000000001,
-        "trade_match": {
-          "upbit_trade_id": "BUY_1767903403552",
-          "upbit_size": 0.001,
-          "upbit_price": 132522000,
-          "upbit_time": "2026-01-08T20:16:43.552Z",
-          "system_trainer": "Scout",
-          "system_action": "BUY"
-        }
-      },
-      {
-        "ts": 1767904304201,
-        "action": "BUY",
-        "price": 132671000.0,
-        "size": 3.7687211221744014e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767982075749,
-        "action": "BUY",
-        "price": 134377000.0,
-        "size": 3.72e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767985882463,
-        "action": "BUY",
-        "price": 133332000.0,
-        "size": 3.7500375003750034e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767986364269,
-        "action": "BUY",
-        "price": 133068000.0,
-        "size": 3.757477379986173e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767986634217,
-        "action": "BUY",
-        "price": 133097000.0,
-        "size": 3.756658677505879e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767993609481,
-        "action": "BUY",
-        "price": 133291000.0,
-        "size": 3.751191003143498e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767993843015,
-        "action": "BUY",
-        "price": 133295000.0,
-        "size": 3.7510784350500766e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1767998731285,
-        "action": "BUY",
-        "price": 133399000.0,
-        "size": 3.748154034138187e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768000642377,
-        "action": "BUY",
-        "price": 133440000.0,
-        "size": 3.7470023980815345e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001105901,
-        "action": "BUY",
-        "price": 133486000.0,
-        "size": 3.7457111607209745e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001531601,
-        "action": "BUY",
-        "price": 133530000.0,
-        "size": 3.7444768965775484e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001617521,
-        "action": "BUY",
-        "price": 133531000.0,
-        "size": 3.744448854573095e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001692649,
-        "action": "BUY",
-        "price": 133549000.0,
-        "size": 3.743944170304533e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001825908,
-        "action": "BUY",
-        "price": 133502000.0,
-        "size": 3.745262243262273e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001894833,
-        "action": "BUY",
-        "price": 133577000.0,
-        "size": 3.7431593762399214e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001930382,
-        "action": "BUY",
-        "price": 133503000.0,
-        "size": 3.745234189493869e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768001972957,
-        "action": "BUY",
-        "price": 133503000.0,
-        "size": 3.745234189493869e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768002118611,
-        "action": "BUY",
-        "price": 133574999.99999999,
-        "size": 3.743e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768031829856,
-        "action": "BUY",
-        "price": 133529999.99999999,
-        "size": 3.744e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768057570848,
-        "action": "BUY",
-        "price": 133565000.0,
-        "size": 3.743e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768061030875,
-        "action": "BUY",
-        "price": 133644000.0,
-        "size": 3.741e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768064063982,
-        "action": "BUY",
-        "price": 133654000.0,
-        "size": 3.741e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768075371623,
-        "action": "BUY",
-        "price": 133585000.0,
-        "size": 3.742e-05,
-        "profit": 0.0
-      },
-      {
-        "ts": 1768177843925,
-        "action": "SELL",
-        "price": 134192000.0,
-        "size": 3.742e-05,
-        "profit": 22.713939999999997
-      },
       {
         "ts": 1768179660091,
         "action": "SELL",
@@ -774,6 +474,237 @@
         "price": 135931000.0,
         "size": 3.678e-05,
         "profit": 0.0
+      },
+      {
+        "ts": 1768318139589,
+        "action": "BUY",
+        "price": 136084000.0,
+        "size": 3.674e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318196582,
+        "action": "BUY",
+        "price": 136133000.0,
+        "size": 3.672e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318505955,
+        "action": "SELL",
+        "price": 136543000.0,
+        "size": 3.698e-05,
+        "profit": 15.161800000000001
+      },
+      {
+        "ts": 1768318651746,
+        "action": "SELL",
+        "price": 136900000.0,
+        "size": 3.686e-05,
+        "profit": 28.271620000000002
+      },
+      {
+        "ts": 1768318681937,
+        "action": "BUY",
+        "price": 136948000.0,
+        "size": 3.651e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318688514,
+        "action": "SELL",
+        "price": 136948000.0,
+        "size": 3.686e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318800686,
+        "action": "BUY",
+        "price": 136892000.0,
+        "size": 3.652e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318863559,
+        "action": "BUY",
+        "price": 136887000.0,
+        "size": 3.652e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768318924072,
+        "action": "BUY",
+        "price": 136965000.0,
+        "size": 3.65e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768319289491,
+        "action": "BUY",
+        "price": 136904000.0,
+        "size": 3.652e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768319342170,
+        "action": "SELL",
+        "price": 136731000.0,
+        "size": 3.683e-05,
+        "profit": -6.371589999999999
+      },
+      {
+        "ts": 1768319343829,
+        "action": "SELL",
+        "price": 136731000.0,
+        "size": 3.683e-05,
+        "profit": -6.371589999999999
+      },
+      {
+        "ts": 1768319346439,
+        "action": "SELL",
+        "price": 136762000.0,
+        "size": 3.681e-05,
+        "profit": -5.22702
+      },
+      {
+        "ts": 1768319346643,
+        "action": "SELL",
+        "price": 136762000.0,
+        "size": 3.68e-05,
+        "profit": -5.2256
+      },
+      {
+        "ts": 1768319409818,
+        "action": "BUY",
+        "price": 136779000.0,
+        "size": 3.655e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768319782952,
+        "action": "BUY",
+        "price": 137250000.0,
+        "size": 3.642e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768319897172,
+        "action": "BUY",
+        "price": 137275000.0,
+        "size": 3.642e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768320817101,
+        "action": "BUY",
+        "price": 137363000.0,
+        "size": 3.639e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768320875654,
+        "action": "BUY",
+        "price": 137296000.0,
+        "size": 3.641e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768321178887,
+        "action": "BUY",
+        "price": 137049000.0,
+        "size": 3.648e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768321303562,
+        "action": "BUY",
+        "price": 137501000.0,
+        "size": 3.636e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768321324300,
+        "action": "SELL",
+        "price": 137520000.0,
+        "size": 3.679e-05,
+        "profit": 0.69901
+      },
+      {
+        "ts": 1768321325898,
+        "action": "SELL",
+        "price": 137520000.0,
+        "size": 3.679e-05,
+        "profit": 0.69901
+      },
+      {
+        "ts": 1768321328874,
+        "action": "SELL",
+        "price": 137520000.0,
+        "size": 3.678e-05,
+        "profit": 0.6988199999999999
+      },
+      {
+        "ts": 1768321334429,
+        "action": "SELL",
+        "price": 137497000.0,
+        "size": 3.674e-05,
+        "profit": -0.14695999999999998
+      },
+      {
+        "ts": 1768321337944,
+        "action": "SELL",
+        "price": 137497000.0,
+        "size": 3.673e-05,
+        "profit": -0.14692000000000002
+      },
+      {
+        "ts": 1768321339417,
+        "action": "SELL",
+        "price": 137382000.0,
+        "size": 3.672e-05,
+        "profit": -4.36968
+      },
+      {
+        "ts": 1768321390246,
+        "action": "SELL",
+        "price": 137282000.0,
+        "size": 3.675e-05,
+        "profit": -8.04825
+      },
+      {
+        "ts": 1768321392311,
+        "action": "SELL",
+        "price": 137282000.0,
+        "size": 3.669e-05,
+        "profit": -8.035110000000001
+      },
+      {
+        "ts": 1768321548515,
+        "action": "BUY",
+        "price": 137215000.0,
+        "size": 3.643e-05,
+        "profit": 0.0
+      },
+      {
+        "ts": 1768323068951,
+        "action": "SELL",
+        "price": 137622000.0,
+        "size": 3.655e-05,
+        "profit": 14.87585
+      },
+      {
+        "ts": 1768323068981,
+        "action": "SELL",
+        "price": 137622000.0,
+        "size": 3.66e-05,
+        "profit": 14.8962
+      },
+      {
+        "ts": 1768323070228,
+        "action": "SELL",
+        "price": 137622000.0,
+        "size": 3.652e-05,
+        "profit": 14.863640000000002
       }
     ]
   },
