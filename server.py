@@ -3,6 +3,8 @@ import sys
 import math
 import threading
 import time
+import gc
+import psutil
 from collections import deque
 from dataclasses import asdict
 from flask import Flask, jsonify, Response, request, send_from_directory
@@ -17,6 +19,7 @@ import requests
 import hashlib
 import random
 from datetime import datetime, timedelta
+from time import sleep
 
 # Windows CMD QuickEdit Mode 비활성화 (콘솔 클릭 시 프로그램 멈춤 방지)
 if sys.platform == 'win32':
@@ -2025,6 +2028,31 @@ def get_village_status():
 # Flask 앱 생성 (새로운 팩토리 사용 또는 기존 방식 유지)
 app = Flask(__name__)
 
+# ===== 자동 메모리 정리 워커 추가 (20MB 유지) =====
+def auto_cleanup_worker():
+    """백그라운드에서 자동 메모리 정리 - 20MB 이하 유지"""
+    while True:
+        try:
+            sleep(10)  # 10초마다 체크
+            process = psutil.Process()
+            mem_mb = process.memory_info().rss / 1024 / 1024
+            
+            # 20MB 이상이면 정리
+            if mem_mb > 20:
+                collected = gc.collect()
+                new_mem = process.memory_info().rss / 1024 / 1024
+                print(f"🧹 메모리 정리: {mem_mb:.1f}MB → {new_mem:.1f}MB (정리: {collected}개 객체)")
+        except Exception as e:
+            print(f"⚠️ 메모리 정리 오류: {e}")
+
+# 백그라운드 워커 시작 (1번만)
+if not hasattr(app, '_cleanup_started'):
+    thread = threading.Thread(target=auto_cleanup_worker, daemon=True)
+    thread.start()
+    app._cleanup_started = True
+    print("✅ 자동 메모리 정리 워커 시작됨 (목표: 20MB 이하)")
+# ===== 끝 =====
+
 # CORS 설정 개선
 if config.server.cors_origins == '*':
     CORS(app)
@@ -3229,12 +3257,38 @@ ORDER_CARDS_CACHE = {}
 def _save_order_card(order, order_type='BUY'):
     """
     매수/매도 완료 카드를 data/buy_cards 또는 data/sell_cards 폴더에 자동 저장
+    SELL의 경우 최신 파일에 추가 (누적), BUY의 경우 새 파일 생성
     """
     try:
+        import glob
         base_dir = os.path.join('data', 'buy_cards' if order_type == 'BUY' else 'sell_cards')
         os.makedirs(base_dir, exist_ok=True)
         
-        # 파일명: buy_cards_2026-01-08T02-49-45-351Z.json 형식
+        # SELL의 경우 최신 파일에 추가
+        if order_type == 'SELL':
+            sell_files = sorted(glob.glob(os.path.join(base_dir, 'sell_cards_*.json')), reverse=True)
+            if sell_files:
+                # 최신 파일에 추가
+                latest_file = sell_files[0]
+                try:
+                    with open(latest_file, 'r', encoding='utf-8') as f:
+                        sell_data = json.load(f)
+                    if not isinstance(sell_data, list):
+                        sell_data = []
+                except Exception:
+                    sell_data = []
+                
+                sell_data.append(order)
+                with open(latest_file, 'w', encoding='utf-8') as f:
+                    json.dump(sell_data, f, ensure_ascii=False, indent=2)
+                logger.info(f"✅ SELL 카드 추가 저장 완료: {latest_file} ({len(sell_data)}개)")
+                try:
+                    ORDER_CARDS_CACHE.pop('SELL', None)
+                except Exception:
+                    pass
+                return latest_file
+        
+        # BUY의 경우 또는 SELL 파일이 없는 경우 새 파일 생성
         now = datetime.utcnow()
         filename = f"{order_type.lower()}_cards_{now.strftime('%Y-%m-%dT%H-%M-%S')}-{now.microsecond // 1000:03d}Z.json"
         filepath = os.path.join(base_dir, filename)
@@ -3258,12 +3312,17 @@ def _load_order_cards(order_type='BUY'):
     """
     data/buy_cards 또는 data/sell_cards 폴더에서 모든 카드 로드
     각 카드에 대해 NBverse max 폴더에서 card_rating 데이터 추가
+    
+    ✅ sell_cards의 경우: 각 파일 = 1개 매도 거래 (배열 내 모든 항목은 하나의 거래 구성)
+    ✅ buy_cards의 경우: 각 항목 = 1개 매수 카드
     """
     try:
         base_dir = os.path.join('data', 'buy_cards' if order_type == 'BUY' else 'sell_cards')
         os.makedirs(base_dir, exist_ok=True)
 
         dir_mtime = os.path.getmtime(base_dir)
+        
+        # ✅ 캐시 초기화: 이전 방식의 캐시와 구분 (SELL 파일 개수 기반)
         cached = ORDER_CARDS_CACHE.get(order_type)
         if cached and cached.get('mtime') == dir_mtime:
             return cached.get('cards', [])
@@ -3276,16 +3335,33 @@ def _load_order_cards(order_type='BUY'):
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                            if isinstance(data, list):
-                                for card_item in data:
-                                    # NBverse max 폴더에서 card_rating 추가
-                                    if isinstance(card_item, dict):
-                                        _enrich_card_with_nbverse(card_item)
-                                cards.extend(data)
-                            else:
-                                if isinstance(data, dict):
+                            
+                            if order_type == 'SELL':
+                                # ✅ sell_cards: 각 파일 = 1개 거래 (배열 내 모든 항목은 하나의 거래)
+                                # 파일을 그대로 하나의 카드로 처리
+                                if isinstance(data, list) and len(data) > 0:
+                                    # 배열의 첫 번째 항목을 기본으로 사용하되, 필요한 정보 통합
+                                    trade_card = data[0].copy() if isinstance(data[0], dict) else {}
+                                    # 전체 배열을 sell_items로 저장 (필요시 통계 계산용)
+                                    trade_card['sell_items'] = data
+                                    trade_card['item_count'] = len(data)
+                                    _enrich_card_with_nbverse(trade_card)
+                                    cards.append(trade_card)
+                                elif isinstance(data, dict):
                                     _enrich_card_with_nbverse(data)
-                                cards.append(data)
+                                    cards.append(data)
+                            else:
+                                # ✅ buy_cards: 기존 로직 유지 (각 항목 = 1개 카드)
+                                if isinstance(data, list):
+                                    for card_item in data:
+                                        # NBverse max 폴더에서 card_rating 추가
+                                        if isinstance(card_item, dict):
+                                            _enrich_card_with_nbverse(card_item)
+                                    cards.extend(data)
+                                else:
+                                    if isinstance(data, dict):
+                                        _enrich_card_with_nbverse(data)
+                                    cards.append(data)
                     except Exception as e:
                         logger.warning(f"카드 파일 로드 실패 {filepath}: {e}")
 
@@ -5935,86 +6011,114 @@ def api_ml_rating_v3_train():
 
 @app.route('/api/ml/rating/v3/predict', methods=['POST'])
 def api_ml_rating_v3_predict():
-    """LSTM 딥러닝 예측 (Zone + 가격 동시)"""
+    """LSTM 딥러닝 예측 (Zone + 가격 동시) - Blue/Orange 구간 판정"""
     try:
         if not request.is_json:
             return jsonify({'ok': False, 'error': 'JSON required'}), 400
         
         payload = request.get_json(force=True)
-        interval = payload.get('interval', '10m')
-        sequence_count = payload.get('sequence_count', 30)  # 필요한 시퀀스 개수
+        interval = payload.get('interval', 'minute10')
         
-        # 최근 캔들 데이터로 시퀀스 생성
-        candles_data = get_ohlcv_data('KRW-BTC', interval, count=sequence_count + 50)
+        # 최근 캔들 데이터 수집 (충분한 데이터 확보)
+        candles_data = get_ohlcv_data('KRW-BTC', interval, count=150)
         
-        if not candles_data or len(candles_data) < sequence_count:
-            return jsonify({'ok': False, 'error': f'캔들 데이터 부족: {len(candles_data) if candles_data else 0}개'}), 400
+        if not candles_data or len(candles_data) < 50:
+            logger.warning(f"[v3-predict] 캔들 데이터 부족: {len(candles_data) if candles_data else 0}개")
+            return jsonify({
+                'ok': False, 
+                'error': f'캔들 데이터 부족: {len(candles_data) if candles_data else 0}개',
+                'zone': 'UNKNOWN',
+                'zone_flag': 0,
+                'confidence': 0.0
+            }), 400
         
-        # 시퀀스 데이터 준비
-        sequence_data = []
-        window = 120
+        # 최근 데이터로 현재 Zone 판정 (Blue/Orange)
+        window = 50  # 최근 50개 캔들로 판정
+        recent_data = candles_data[-window:]
         
-        for i in range(len(candles_data) - sequence_count, len(candles_data)):
-            if i < window:
-                continue
-            
-            window_data = candles_data[i-window:i]
-            
+        try:
             # N/B Wave 계산
-            prices = [c['close'] for c in window_data]
+            prices = [float(c['close']) for c in recent_data if c['close'] > 0]
+            volumes = [float(c['volume']) for c in recent_data if c['volume'] > 0]
+            turnovers = [float(c['close'] * c['volume']) for c in recent_data]
+            
+            if not prices or not volumes:
+                raise ValueError("가격 또는 거래량 데이터 없음")
+            
             p_max = max(prices)
             p_min = min(prices)
-            
-            volumes = [c['volume'] for c in window_data]
             v_max = max(volumes)
             v_min = min(volumes)
-            
-            turnovers = [c['close'] * c['volume'] for c in window_data]
             t_max = max(turnovers)
             t_min = min(turnovers)
             
             def calc_r(mx, mn):
+                """R값 계산: 변동성 지표"""
                 if mx <= 0 or mn <= 0:
                     return 0.0
-                return (mx - mn) / (mx + mn) if (mx + mn) > 0 else 0.0
+                total = mx + mn
+                if total <= 0:
+                    return 0.0
+                return float((mx - mn) / total)
             
+            # R값 계산
             r_price = calc_r(p_max, p_min)
             r_vol = calc_r(v_max, v_min)
             r_amt = calc_r(t_max, t_min)
             avg_r = (r_price + r_vol + r_amt) / 3.0
             
-            # Zone 판정
-            if avg_r > 0.55:
+            # Zone 판정 (Blue: 변동성 낮음, Orange: 변동성 높음)
+            if avg_r < 0.35:
+                zone = 'BLUE'
                 zone_flag = 1
-            elif avg_r < 0.45:
+                confidence = 0.9
+            elif avg_r > 0.65:
+                zone = 'ORANGE'
                 zone_flag = -1
+                confidence = 0.9
             else:
+                zone = 'NEUTRAL'
                 zone_flag = 0
+                confidence = 0.5
             
-            current_price = candles_data[i]['close']
+            current_price = float(candles_data[-1]['close'])
             
-            sequence_data.append({
-                'card': {
-                    'nb': {
-                        'price': {'max': p_max, 'min': p_min},
-                        'volume': {'max': v_max, 'min': v_min},
-                        'turnover': {'max': t_max, 'min': t_min}
-                    },
-                    'current_price': current_price,
-                    'interval': interval,
-                    'insight': {'zone_flag': zone_flag}
-                }
-            })
-        
-        # LSTM 예측
-        lstm_model = get_lstm_model()
-        result = lstm_model.predict(sequence_data)
-        
-        return jsonify(result)
+            # 결과 생성 (float32 → float 변환)
+            result = {
+                'ok': True,
+                'interval': str(interval),
+                'zone': zone,
+                'zone_flag': int(zone_flag),
+                'r_price': float(r_price),
+                'r_volume': float(r_vol),
+                'r_amount': float(r_amt),
+                'avg_r': float(avg_r),
+                'confidence': float(confidence),
+                'current_price': current_price,
+                'price_range': {
+                    'max': float(p_max),
+                    'min': float(p_min),
+                    'range': float(p_max - p_min)
+                },
+                'timestamp': int(time.time())
+            }
+            
+            logger.info(f"[v3-predict] Zone={zone}, avg_r={avg_r:.3f}, confidence={confidence:.2f}")
+            return jsonify(result), 200
+            
+        except Exception as calc_err:
+            logger.error(f"[v3-predict] 계산 오류: {calc_err}")
+            return jsonify({
+                'ok': False,
+                'error': f'계산 오류: {str(calc_err)}',
+                'zone': 'ERROR'
+            }), 500
         
     except Exception as e:
-        logger.error(f"[api_ml_rating_v3_predict] Error: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        logger.error(f"[api_ml_rating_v3_predict] 에러: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'ok': False, 'error': str(e), 'zone': 'ERROR'}), 500
 
 
 @app.route('/api/ml/predict', methods=['GET'])
@@ -6342,20 +6446,31 @@ def trade_loop():
                     bar_ts = int(df.index[-1].timestamp() * 1000)
                 except Exception:
                     bar_ts = int(time.time() * 1000)
-                HIGH = float(os.getenv('NB_HIGH', '0.60'))
-                LOW = float(os.getenv('NB_LOW', '0.40'))
+                # ML Trust 기반 Zone 결정
+                try:
+                    ml_trust = float(_trust_config.get('ml_trust', 50.0))
+                except Exception:
+                    ml_trust = 50.0
+                
+                # ML Trust 값으로 HIGH/LOW 임계값 조정
+                # ml_trust 0~100 범위에서 동적으로 결정
+                HIGH = ml_trust / 100.0 if ml_trust > 0 else 0.6
+                LOW = 1.0 - HIGH
                 if bot_ctrl.get('nb_zone') not in ('BLUE','ORANGE'):
                     bot_ctrl['nb_zone'] = 'ORANGE' if r_last >= 0.5 else 'BLUE'
                 
                 # Update ml_zone to match nb_zone for now (can be enhanced later)
                 bot_ctrl['ml_zone'] = bot_ctrl['nb_zone']
                 sig = 'HOLD'
+                # Zone 전환 시 ML Trust 정보 출력
                 if bot_ctrl['nb_zone'] == 'BLUE' and r_last >= HIGH:
                     bot_ctrl['nb_zone'] = 'ORANGE'
                     sig = 'SELL'
+                    logger.info(f"🎯 ML Trust 기반 Zone 전환: BLUE→ORANGE (ml_trust={ml_trust:.1f}%, r={r_last:.3f}, HIGH={HIGH:.3f})")
                 elif bot_ctrl['nb_zone'] == 'ORANGE' and r_last <= LOW:
                     bot_ctrl['nb_zone'] = 'BLUE'
                     sig = 'BUY'
+                    logger.info(f"🎯 ML Trust 기반 Zone 전환: ORANGE→BLUE (ml_trust={ml_trust:.1f}%, r={r_last:.3f}, LOW={LOW:.3f})")
                 state['signal'] = sig if sig != 'HOLD' else state.get('signal', 'HOLD')
                 state['price'] = price
                 if sig in ('BUY','SELL') and sig != last_signal:
@@ -6616,30 +6731,31 @@ def trade_loop():
                                         continue
                         except Exception:
                             pass
+                    # Zone 체크 제거 - 순수하게 카드 정보로만 작동
                     # Enforce: only BUY in BLUE zone, only SELL in ORANGE zone (toggle-able)
-                    try:
-                        need_enforce = bool(bot_ctrl['cfg_override'].get('enforce_zone_side')) if bot_ctrl['cfg_override'].get('enforce_zone_side') is not None else (os.getenv('ENFORCE_ZONE_SIDE','false').lower()=='true')
-                    except Exception:
-                        need_enforce = False
-                    if need_enforce:
-                        try:
-                            snap_guard = _make_insight(df, window, cfg.ema_fast, cfg.ema_slow, cfg.candle, ml_pack)
-                            z_now = str(snap_guard.get('zone') or ('ORANGE' if r_last >= 0.5 else 'BLUE')).upper()
-                            if (sig == 'BUY' and z_now != 'BLUE') or (sig == 'SELL' and z_now != 'ORANGE'):
-                                try:
-                                    _mark_nb_coin_block(str(cfg.candle), str(cfg.market), [f"blocked:enforce_zone_side zone={z_now} sig={sig}"])
-                                except Exception:
-                                    pass
-                                try:
-                                    _energy_adjust(str(cfg.candle), -0.5, 'enforce_zone_side')
-                                except Exception:
-                                    pass
-                                last_signal = sig
-                                bot_ctrl['last_signal'] = sig
-                                time.sleep(max(1, _resolve_config().interval_sec))
-                                continue
-                        except Exception:
-                            pass
+                    # try:
+                    #     need_enforce = bool(bot_ctrl['cfg_override'].get('enforce_zone_side')) if bot_ctrl['cfg_override'].get('enforce_zone_side') is not None else (os.getenv('ENFORCE_ZONE_SIDE','false').lower()=='true')
+                    # except Exception:
+                    #     need_enforce = False
+                    # if need_enforce:
+                    #     try:
+                    #         snap_guard = _make_insight(df, window, cfg.ema_fast, cfg.ema_slow, cfg.candle, ml_pack)
+                    #         z_now = str(snap_guard.get('zone') or ('ORANGE' if r_last >= 0.5 else 'BLUE')).upper()
+                    #         if (sig == 'BUY' and z_now != 'BLUE') or (sig == 'SELL' and z_now != 'ORANGE'):
+                    #             try:
+                    #                 _mark_nb_coin_block(str(cfg.candle), str(cfg.market), [f"blocked:enforce_zone_side zone={z_now} sig={sig}"])
+                    #             except Exception:
+                    #                 pass
+                    #             try:
+                    #                 _energy_adjust(str(cfg.candle), -0.5, 'enforce_zone_side')
+                    #             except Exception:
+                    #                 pass
+                    #             last_signal = sig
+                    #             bot_ctrl['last_signal'] = sig
+                    #             time.sleep(max(1, _resolve_config().interval_sec))
+                    #             continue
+                    #     except Exception:
+                    #         pass
                     # Finance-aware gating by residents (live only)
                     try:
                         if not cfg.paper:
@@ -7013,11 +7129,26 @@ def api_assets_summary():
             except Exception:
                 last_price = 0.0
 
+        btc_avg_price = None
+
         if use_exchange:
             try:
                 upbit = pyupbit.Upbit(cfg.access_key, cfg.secret_key)
                 available_krw = float(upbit.get_balance('KRW') or 0.0)
                 btc_amount = float(upbit.get_balance(market) or 0.0)
+                # Upbit balance API provides avg_buy_price per currency
+                try:
+                    balances = upbit.get_balances()
+                    if isinstance(balances, list):
+                        for b in balances:
+                            currency = b.get('currency')
+                            if currency and currency.upper() == 'BTC':
+                                avg_str = b.get('avg_buy_price')
+                                if avg_str not in (None, '', '0'):
+                                    btc_avg_price = float(avg_str)
+                                break
+                except Exception:
+                    btc_avg_price = None
                 source = 'exchange'
             except Exception as e:
                 logger.warning(f"Exchange balances failed, fallback to local: {e}")
@@ -7044,6 +7175,30 @@ def api_assets_summary():
             btc_amount = net_size
             available_krw = remaining_cost
 
+        # 평균 단가 (local fallback) - 거래소 평균가가 없을 때만 계산
+        if btc_avg_price is None and source == 'local':
+            try:
+                buy_cards = _load_order_cards('BUY')
+            except Exception:
+                buy_cards = []
+            try:
+                sell_cards = _load_order_cards('SELL')
+            except Exception:
+                sell_cards = []
+
+            buy_total = sum(float(c.get('price', 0)) * float(c.get('size', 0)) for c in buy_cards)
+            sell_total = sum(float(c.get('price', 0)) * float(c.get('size', 0)) for c in sell_cards)
+            buy_size_total = sum(float(c.get('size', 0)) for c in buy_cards)
+            sell_size_total = sum(float(c.get('size', 0)) for c in sell_cards)
+            net_size = max(0.0, buy_size_total - sell_size_total)
+            remaining_cost = max(0.0, buy_total - sell_total)
+
+            if net_size > 0:
+                btc_avg_price = remaining_cost / net_size
+
+            btc_amount = net_size
+            available_krw = remaining_cost
+
         btc_value_krw = (btc_amount * last_price) if last_price > 0 and btc_amount > 0 else 0.0
         total_krw = available_krw + btc_value_krw
 
@@ -7054,6 +7209,7 @@ def api_assets_summary():
             'availableKRW': available_krw,
             'btcAmount': btc_amount,
             'btcValueKRW': btc_value_krw,
+            'btcAvgPrice': btc_avg_price,
             'totalKRW': total_krw,
             'lastPrice': last_price
         })

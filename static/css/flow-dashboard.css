@@ -24,8 +24,10 @@ body {
   padding: 20px;
   margin-bottom: 30px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 15px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
@@ -731,6 +733,113 @@ body {
   background: linear-gradient(90deg, #4285f4, #72a6ff);
 }
 
+/* Performance Monitor (FPS Style) */
+.perf-monitor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(14, 20, 36, 0.8);
+  border: 1px solid rgba(0, 209, 255, 0.3);
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+  width: 100%;
+  order: 3;
+}
+
+.perf-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 70px;
+}
+
+.perf-stat-label {
+  font-size: 9px;
+  color: #9aa8c2;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.perf-stat-value {
+  font-size: 14px;
+  font-weight: 900;
+  color: #00d1ff;
+  text-shadow: 0 0 8px rgba(0, 209, 255, 0.4);
+}
+
+.perf-stat-value.good {
+  color: #0ecb81;
+  text-shadow: 0 0 8px rgba(14, 203, 129, 0.4);
+}
+
+.perf-stat-value.warning {
+  color: #ffb703;
+  text-shadow: 0 0 8px rgba(255, 183, 3, 0.4);
+}
+
+.perf-stat-value.critical {
+  color: #f6465d;
+  text-shadow: 0 0 8px rgba(246, 70, 93, 0.4);
+  animation: perfPulse 1s infinite;
+}
+
+@keyframes perfPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.perf-divider {
+  width: 1px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.perf-clean-btn {
+  background: rgba(246, 70, 93, 0.2);
+  border: 1px solid rgba(246, 70, 93, 0.4);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.perf-clean-btn:hover {
+  background: rgba(246, 70, 93, 0.4);
+  transform: scale(1.1);
+}
+
+.perf-clean-btn:active {
+  transform: scale(0.95);
+}
+
+.perf-timing-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 200px;
+  flex: 1;
+  max-width: 300px;
+}
+
+.perf-timing-chart canvas {
+  border-radius: 4px;
+  background: rgba(14, 20, 36, 0.6);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.perf-avg-time {
+  font-size: 10px;
+  color: #00d1ff;
+  font-weight: 600;
+}
+
 /* Step 8, 9 Containers */
 .step8-container, .step9-container {
   margin-bottom: 30px;
@@ -762,5 +871,18 @@ body {
   
   .step2-content {
     grid-template-columns: 1fr;
+  }
+  
+  .perf-monitor {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .perf-stat {
+    min-width: 60px;
+  }
+  
+  .perf-stat-value {
+    font-size: 12px;
   }
 }

@@ -3020,6 +3020,18 @@
                 <div style="font-size: 10px; color: #888; margin-top: 6px;">${time} ${paper}</div>
               </div>
 
+              <!-- 카드 등급 -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div style="background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.3); border-radius: 6px; padding: 8px;">
+                  <div style="font-size:10px; color:#bbb;">카드 등급</div>
+                  <div id="${chartId}_cardGrade" style="font-size:14px; font-weight:700; color:#ffd700;">-</div>
+                </div>
+                <div style="background: rgba(230,238,252,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px;">
+                  <div style="font-size:10px; color:#bbb;">점수</div>
+                  <div id="${chartId}_cardScore" style="font-size:14px; font-weight:700; color:#e6eefc;">-</div>
+                </div>
+              </div>
+
               <!-- 카드 코드 / 리그 -->
               <div style="display:flex; justify-content:space-between; align-items:center; margin: -4px 0 8px 0;">
                 <div style="font-size:11px; color:#9aa8c2;">카드 코드</div>
@@ -3043,10 +3055,31 @@
                 </div>
               </div>
 
+              <!-- 실현 손익 -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 실현 손익</div>
+                  <div id="${chartId}_pnl" style="font-size:12px; font-weight:600; color:#0ecb81;">-</div>
+                </div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">📊 손익률</div>
+                  <div id="${chartId}_pnlRate" style="font-size:12px; font-weight:600; color:#0ecb81;">-</div>
+                </div>
+              </div>
+              <!-- 🤖 ML Trust / 🗺️ N/B Zone -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">🤖 ML Trust</div>
+                  <div id="${chartId}_mlTrust" style="font-size:12px; font-weight:600; color:#a78bfa;">-</div>
+                </div>
+                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">🗺️ N/B Zone</div>
+                  <div id="${chartId}_nbZone" style="font-size:12px; font-weight:600; color:#4285f4;">-</div>
+                </div>
+              </div>
+
               <!-- N/B 값들 -->
               <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                <div style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                  <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">💰 가격 N/B</div>
                   <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:10px;">MAX</span><span id="${chartId}_pmax" style="font-size:11px; font-weight:600; color:#0ecb81;">-</span></div>
                   <div class="d-flex justify-content-between"><span class="text-muted" style="font-size:10px;">MIN</span><span id="${chartId}_pmin" style="font-size:11px; font-weight:600; color:#f6465d;">-</span></div>
                 </div>
@@ -3080,6 +3113,28 @@
             const ts = o.ts || '';
             const fmt10 = (v) => (v == null ? '-' : Number(v).toFixed(10));
             const setTxt = (sel, txt) => { const e = document.getElementById(sel); if (e) e.textContent = txt; };
+            
+            // 카드 등급, 점수, 실현 손익, ML Trust 설정
+            const cardRating = o.card_rating || {};
+            const mlTrust = o.ml_trust || {};
+            const realizedPnl = o.realized_pnl || {};
+            const nbZone = o.nb_zone || {};
+            
+            const cardGrade = cardRating.code ? `${cardRating.code} (${cardRating.league})` : '-';
+            const cardScore = cardRating.avgDiff ? cardRating.avgDiff.toFixed(2) : '-';
+            const cardEnhance = cardRating.enhancement ? `+${cardRating.enhancement}강` : '-';
+            const pnlAvg = realizedPnl.avg != null ? Math.round(realizedPnl.avg).toLocaleString() + ' KRW' : '-';
+            const pnlRate = realizedPnl.avg != null && o.price ? ((realizedPnl.avg / o.price) * 100).toFixed(2) + '%' : '-';
+            const mlTrustGrade = mlTrust.grade || '-';
+            const nbZoneInfo = nbZone.zone ? `${nbZone.zone} (${nbZone.zone_conf?.toFixed(2) || '0.00'})` : '-';
+            
+            setTxt(`${id}_cardGrade`, cardGrade);
+            setTxt(`${id}_cardScore`, cardScore);
+            setTxt(`${id}_pnl`, pnlAvg);
+            setTxt(`${id}_pnlRate`, pnlRate);
+            setTxt(`${id}_mlTrust`, mlTrustGrade);
+            setTxt(`${id}_nbZone`, nbZoneInfo);
+            
             fetch(`/api/cards/chart?market=${encodeURIComponent(market)}&interval=${encodeURIComponent(tfi)}&ts=${encodeURIComponent(ts)}&count=180`)
               .then(r => r.json())
               .then(j => {
