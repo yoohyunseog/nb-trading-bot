@@ -282,13 +282,18 @@ const FlowDashboard = (() => {
   }
 
   function getLeagueName(avgPts) {
-    // Determine league based on avgPts
+    // Determine league based on avgPts (11 leagues)
+    if (avgPts < 1.0) return '아이언';
     if (avgPts < 2.0) return '브론즈';
     if (avgPts < 3.0) return '실버';
     if (avgPts < 4.0) return '골드';
-    if (avgPts < 5.0) return '플래티넘';
-    if (avgPts < 5.75) return '다이아';
-    return '첼린저';
+    if (avgPts < 4.5) return '플래티넘';
+    if (avgPts < 5.0) return '다이아';
+    if (avgPts < 5.5) return '마스터';
+    if (avgPts < 6.0) return '그랜드마스터';
+    if (avgPts < 6.25) return '첼린저';
+    if (avgPts < 6.5) return '레전드';
+    return '임모탈';
   }
 
   function computeCardCodeFS(params) {
@@ -3324,6 +3329,13 @@ const FlowDashboard = (() => {
         this.elements.progressBar = document.getElementById('abProgressBar');
         this.elements.countdownLabel = document.getElementById('abNextText');
 
+        // ===== 카드 필터 요소들 (NEW) =====
+        this.elements.leagueSelect = document.getElementById('autoBuyLeague');
+        this.elements.gradeSelect = document.getElementById('autoBuyGrade');
+        this.elements.percentSelect = document.getElementById('autoBuyPricePercent');
+        this.elements.amountDisplay = document.getElementById('autoBuyPriceAmount');
+        this.elements.purchasedCombos = document.getElementById('purchasedCombinations');
+
         if (!this.elements.toggleBtn) return;
         
         // 초기화 완료 플래그 설정
@@ -3411,6 +3423,31 @@ const FlowDashboard = (() => {
         // 설정 변경 시 저장
         this.elements.intervalSel?.addEventListener('change', () => this.saveSettings());
         this.elements.amountInput?.addEventListener('change', () => this.saveSettings());
+        
+        // ===== 카드 필터 이벤트 리스너 (NEW) =====
+        this.elements.leagueSelect?.addEventListener('change', () => {
+          this.saveSettings();
+          this.updatePurchasedCombinations();
+        });
+        
+        this.elements.gradeSelect?.addEventListener('change', () => {
+          this.saveSettings();
+          this.updatePurchasedCombinations();
+        });
+        
+        this.elements.percentSelect?.addEventListener('change', () => {
+          this.calculatePriceAmount();
+          this.saveSettings();
+          this.updatePurchasedCombinations();
+        });
+        
+        // input 이벤트도 추가 (사용자가 직접 입력할 때)
+        this.elements.percentSelect?.addEventListener('input', () => {
+          this.calculatePriceAmount();
+          this.saveSettings();
+          this.updatePurchasedCombinations();
+        });
+
         this.elements.blueOnlyChk?.addEventListener('change', () => this.saveSettings());
         this.elements.noDuplicateChk?.addEventListener('change', () => this.saveSettings());
         this.elements.higherGradeChk?.addEventListener('change', () => this.saveSettings());
@@ -3435,6 +3472,11 @@ const FlowDashboard = (() => {
         const modeInterval = localStorage.getItem('autoBuy_modeInterval');
         const modeWait = localStorage.getItem('autoBuy_modeWait');
         const waitTime = localStorage.getItem('autoBuy_waitTime');
+        
+        // ===== 카드 필터 로드 (NEW) =====
+        const league = localStorage.getItem('autoBuy_league') || '';
+        const grade = localStorage.getItem('autoBuy_grade') || '';
+        const pricePercent = localStorage.getItem('autoBuy_pricePercent') || '';
         
         if (interval && this.elements.intervalSel) {
           this.elements.intervalSel.value = interval;
@@ -3464,7 +3506,23 @@ const FlowDashboard = (() => {
           this.elements.waitTimeInput.value = waitTime;
         }
         
-        console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime });
+        // ===== 카드 필터 값 복원 (NEW) =====
+        if (league && this.elements.leagueSelect) {
+          this.elements.leagueSelect.value = league;
+        }
+        if (grade && this.elements.gradeSelect) {
+          this.elements.gradeSelect.value = grade;
+        }
+        if (pricePercent && this.elements.percentSelect) {
+          this.elements.percentSelect.value = pricePercent;
+        }
+        
+        console.log('✅ Auto Buy 설정 복원:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime, league, grade, pricePercent });
+        
+        // % 입력되었으면 금액 계산
+        if (pricePercent) {
+          setTimeout(() => this.calculatePriceAmount(), 100);
+        }
         
         // 서버에서 실제 상태 가져오기 (최초 1회만)
         if (!this.serverStateSynced) {
@@ -3530,6 +3588,11 @@ const FlowDashboard = (() => {
         const modeWait = this.elements.modeWaitChk?.checked ? 'true' : 'false';
         const waitTime = this.elements.waitTimeInput?.value || '0';
         
+        // ===== 카드 필터 저장 (NEW) =====
+        const league = this.elements.leagueSelect?.value || '';
+        const grade = this.elements.gradeSelect?.value || '';
+        const pricePercent = this.elements.percentSelect?.value || '';
+        
         localStorage.setItem('autoBuy_interval', interval);
         localStorage.setItem('autoBuy_amount', amount);
         localStorage.setItem('autoBuy_blueOnly', blueOnly);
@@ -3539,10 +3602,84 @@ const FlowDashboard = (() => {
         localStorage.setItem('autoBuy_modeInterval', modeInterval);
         localStorage.setItem('autoBuy_modeWait', modeWait);
         localStorage.setItem('autoBuy_waitTime', waitTime);
+        localStorage.setItem('autoBuy_league', league);
+        localStorage.setItem('autoBuy_grade', grade);
+        localStorage.setItem('autoBuy_pricePercent', pricePercent);
         
-        console.log('💾 Auto Buy 설정 저장:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime });
+        console.log('💾 Auto Buy 설정 저장:', { interval, amount, blueOnly, noDuplicate, higherGrade, blueCardOnly, modeInterval, modeWait, waitTime, league, grade, pricePercent });
       } catch (err) {
         console.warn('Auto Buy 설정 저장 실패:', err);
+      }
+    },
+
+    async checkDuplicate(league, grade, percent) {
+      /**
+       * 서버 API를 호출하여 조합이 중복되었는지 확인
+       * @returns {Object} { ok: bool, allowed: bool, reason: string, purchased_combinations: [...] }
+       */
+      try {
+        const resp = await fetch('/api/auto-buy/check-duplicate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            league: league || '',
+            grade: grade || '',
+            percent: percent || '',
+            market: 'KRW-BTC'
+          })
+        });
+        
+        const data = await resp.json();
+        console.log(`🔍 중복 확인: ${league}/${grade}/${percent}%`, data);
+        
+        return {
+          ok: data.ok !== false,
+          allowed: data.allowed === true,
+          reason: data.reason || '알 수 없는 응답',
+          purchased_combinations: data.purchased_combinations || []
+        };
+      } catch (err) {
+        console.error('❌ 중복 확인 오류:', err);
+        return {
+          ok: false,
+          allowed: false,
+          reason: `중복 확인 실패: ${err.message}`,
+          purchased_combinations: []
+        };
+      }
+    },
+    
+    async recordPurchase(league, grade, percent, priceKrw) {
+      /**
+       * 구매 성공 시 서버에 기록 저장
+       * @returns {Object} { ok: bool, message: string }
+       */
+      try {
+        const resp = await fetch('/api/auto-buy/record-purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            league: league || '',
+            grade: grade || '',
+            percent: percent || '',
+            price_krw: priceKrw || 0,
+            market: 'KRW-BTC'
+          })
+        });
+        
+        const data = await resp.json();
+        console.log(`✅ 구매 기록 저장: ${league}/${grade}/${percent}%`, data);
+        
+        return {
+          ok: data.ok === true,
+          message: data.message || '기록 저장 완료'
+        };
+      } catch (err) {
+        console.error('❌ 구매 기록 저장 오류:', err);
+        return {
+          ok: false,
+          message: `구매 기록 저장 실패: ${err.message}`
+        };
       }
     },
 
@@ -3610,7 +3747,7 @@ const FlowDashboard = (() => {
       }
     },
 
-    tick() {
+    async tick() {
       const now = Date.now();
       
       // phase가 없으면 IDLE
@@ -3645,7 +3782,7 @@ const FlowDashboard = (() => {
           this.phase = 'BUYING';
           this.lastCheckedCardId = null; // 카드 ID 리셋 (중복 체크 초기화)
           this.startTime = now;
-          this.checkAndBuy('interval'); // 즉시 한번 체크
+          await this.checkAndBuy('interval'); // 즉시 한번 체크
         }
       }
       
@@ -3670,14 +3807,14 @@ const FlowDashboard = (() => {
         // 매수 시도 간격 도달
         if (remain <= 0) {
           this.startTime = now; // 타이머 리셋
-          this.checkAndBuy('interval');
+          await this.checkAndBuy('interval');
         }
       }
       
       if (this.elements.statusBadge) this.elements.statusBadge.textContent = 'ON';
     },
 
-    checkAndBuy(mode) {
+    async checkAndBuy(mode) {
       const currentCard = window.ccCurrentData;
       const currentCardId = currentCard?.uuid || currentCard?.id || currentCard?.coin;
       
@@ -3827,7 +3964,36 @@ const FlowDashboard = (() => {
       
       logMsgs.push('---');
       
-      const now = Date.now();
+      // ===== 카드 필터 검증 (리그/등급/가격대) =====
+      const filterLeague = this.elements.leagueSelect?.value || '';
+      const filterGrade = this.elements.gradeSelect?.value || '';
+      const filterPercent = this.elements.percentSelect?.value || '';
+      
+      if (filterLeague && filterGrade && filterPercent) {
+        logMsgs.push(`🎫 카드 필터 활성: ${filterLeague}/${filterGrade}/${filterPercent}%`);
+        
+        // 서버에 중복 확인 요청
+        const duplicateCheck = await this.checkDuplicate(filterLeague, filterGrade, filterPercent);
+        
+        if (!duplicateCheck.ok) {
+          canBuy = false;
+          reason = `중복 확인 실패: ${duplicateCheck.reason}`;
+          logMsgs.push(`❌ 중복 확인 오류: ${duplicateCheck.reason}`);
+        } else if (!duplicateCheck.allowed) {
+          canBuy = false;
+          reason = `${duplicateCheck.reason}`;
+          logMsgs.push(`❌ 중복 구매 방지: ${duplicateCheck.reason}`);
+        } else {
+          logMsgs.push(`✅ 중복 확인 통과: 구매 가능`);
+        }
+      } else if (filterLeague || filterGrade || filterPercent) {
+        // 필터 중 일부만 설정된 경우 경고
+        logMsgs.push(`⚠️ 카드 필터 불완전: 리그=${filterLeague || '미설정'}, 등급=${filterGrade || '미설정'}, 가격대=${filterPercent || '미설정'}`);
+      } else {
+        logMsgs.push(`⊘ 카드 필터: 비활성화`);
+      }
+      
+      logMsgs.push('---');
       
       if (canBuy) {
         try {
@@ -3845,6 +4011,17 @@ const FlowDashboard = (() => {
               enhance: currentCard.enhance || 0
             };
             logMsgs.push(`✅ 매수 성공: ${currentCard.coin} (${currentCard.grade || currentCard.rating || 'F'}+${currentCard.enhance || 0}) - N/B Max: ${currentCard.nbMax || currentCard.max}`);
+            
+            // ===== 카드 필터로 구매한 경우 서버에 기록 저장 =====
+            if (filterLeague && filterGrade && filterPercent) {
+              const priceKrw = parseFloat(this.elements.amountDisplay?.value?.replace(/[^0-9]/g, '') || 0);
+              const recordResult = await this.recordPurchase(filterLeague, filterGrade, filterPercent, priceKrw);
+              if (recordResult.ok) {
+                logMsgs.push(`💾 구매 기록 저장: ${filterLeague}/${filterGrade}/${filterPercent}% @ ${priceKrw} KRW`);
+              } else {
+                logMsgs.push(`⚠️ 구매 기록 저장 실패: ${recordResult.message}`);
+              }
+            }
           }
           
           // ===== 매수 성공 후 다시 WAIT 단계로 복귀 =====
@@ -3964,6 +4141,120 @@ const FlowDashboard = (() => {
         console.log('💾 서버 Auto Buy ON 저장:', data);
       } catch (err) {
         console.warn('서버 Auto Buy 설정 저장 실패:', err);
+      }
+    },
+
+    // ===== 새 메서드: % 가격대에서 금액 계산 (NEW) =====
+    calculatePriceAmount() {
+      try {
+        const percent = parseFloat(this.elements.percentSelect?.value || '0');
+        const amountDisplay = this.elements.amountDisplay;
+        
+        if (!percent || percent <= 0) {
+          if (amountDisplay) amountDisplay.placeholder = '- KRW';
+          return;
+        }
+        
+        // 현재 BTC 가격 가져오기
+        let btcPrice = 0;
+        if (window.ccCurrentData && window.ccCurrentData.current_price) {
+          btcPrice = parseFloat(window.ccCurrentData.current_price);
+        } else if (window.flowDashboardState && window.flowDashboardState.marketData && window.flowDashboardState.marketData.price) {
+          btcPrice = parseFloat(window.flowDashboardState.marketData.price);
+        }
+        
+        if (btcPrice <= 0) {
+          console.warn('❌ BTC 가격을 가져올 수 없습니다');
+          if (amountDisplay) amountDisplay.placeholder = '? KRW (가격 로딩 중)';
+          return;
+        }
+        
+        // 가격 계산: BTC가격 × (% / 100)
+        const calculatedAmount = btcPrice * (percent / 100);
+        
+        // 표시
+        if (amountDisplay) {
+          amountDisplay.value = calculatedAmount.toLocaleString('ko-KR', {
+            style: 'currency',
+            currency: 'KRW',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          });
+        }
+        
+        console.log(`✅ % 금액 계산: BTC ${btcPrice.toLocaleString()} × ${percent}% = ${calculatedAmount.toLocaleString('ko-KR')}`);
+      } catch (err) {
+        console.warn('% 금액 계산 실패:', err);
+      }
+    },
+
+    // ===== 새 메서드: 이미 구매한 조합 업데이트 (NEW) =====
+    updatePurchasedCombinations() {
+      try {
+        const container = this.elements.purchasedCombos;
+        if (!container) return;
+        
+        // localStorage에서 구매 기록 가져오기 (구조: autoBuy_purchased_[league]_[grade]_[percent])
+        const purchased = {};
+        for (let key in localStorage) {
+          if (key.startsWith('autoBuy_purchased_')) {
+            // 키 파싱: autoBuy_purchased_{league}_{grade}_{percent}
+            const match = key.match(/autoBuy_purchased_(.+?)_(.+?)_(.+)/);
+            if (match) {
+              const [, league, grade, percent] = match;
+              const comboKey = `${league}_${grade}_${percent}`;
+              purchased[comboKey] = localStorage.getItem(key);
+            }
+          }
+        }
+        
+        // 현재 선택된 조합
+        const currentLeague = this.elements.leagueSelect?.value || '';
+        const currentGrade = this.elements.gradeSelect?.value || '';
+        const currentPercent = this.elements.percentSelect?.value || '';
+        
+        // 필터가 선택되지 않으면 모두 표시
+        let combosToShow = Object.keys(purchased);
+        
+        if (currentLeague || currentGrade || currentPercent) {
+          combosToShow = combosToShow.filter(combo => {
+            const [league, grade, percent] = combo.split('_');
+            
+            if (currentLeague && league !== currentLeague) return false;
+            if (currentGrade && grade !== currentGrade) return false;
+            if (currentPercent && percent !== currentPercent) return false;
+            
+            return true;
+          });
+        }
+        
+        // HTML 생성
+        if (combosToShow.length === 0) {
+          container.innerHTML = '<div style="color:#666;">조합 없음</div>';
+          return;
+        }
+        
+        const html = combosToShow.map(combo => {
+          const [league, grade, percent] = combo.split('_');
+          const amount = purchased[combo];
+          const displayPercent = percent === '' ? '없음' : `${percent}%`;
+          const displayLeague = league === '' ? '전체' : league;
+          const displayGrade = grade === '' ? '전체' : grade;
+          
+          return `<div style="padding:4px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:8px;">
+            <span style="color:#ffd700;">${displayLeague}</span>
+            <span style="color:#00d1ff;margin:0 4px;">•</span>
+            <span style="color:#00d1ff;">${displayGrade}</span>
+            <span style="color:#9aa8c2;margin:0 4px;">•</span>
+            <span style="color:#0ecb81;">${displayPercent}</span>
+            <span style="color:#9aa8c2;">= ${amount ? amount.toLocaleString('ko-KR') : '?'} KRW</span>
+          </div>`;
+        }).join('');
+        
+        container.innerHTML = html;
+        console.log(`📊 구매 조합 업데이트: ${combosToShow.length}개`);
+      } catch (err) {
+        console.warn('구매 조합 업데이트 실패:', err);
       }
     },
 

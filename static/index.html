@@ -1528,12 +1528,17 @@
       const avgPts = avgPtsRaw + (sign === '+' ? 0.25 : (sign === '-' ? -0.25 : 0));
 
       const league = (() => {
+        if (avgPts < 1.0) return '아이언';
         if (avgPts < 2.0) return '브론즈';
         if (avgPts < 3.0) return '실버';
         if (avgPts < 4.0) return '골드';
-        if (avgPts < 5.0) return '플래티넘';
-        if (avgPts < 5.75) return '다이아';
-        return '첼린저';
+        if (avgPts < 4.5) return '플래티넘';
+        if (avgPts < 5.0) return '다이아';
+        if (avgPts < 5.5) return '마스터';
+        if (avgPts < 6.0) return '그랜드마스터';
+        if (avgPts < 6.25) return '첼린저';
+        if (avgPts < 6.5) return '레전드';
+        return '임모탈';
       })();
 
       const group = avgPts < 2.5 ? 'EASY' : (avgPts < 4.5 ? 'NORMAL' : 'HARD');

@@ -49,6 +49,7 @@ try:
         ApiException, ValidationError, AuthenticationError, 
         NotFoundError, InternalServerError, ExternalApiError
     )
+    from utils.trade_logger import get_trade_logger
     from config import config
 except ImportError:
     # 상대 임포트가 실패하면 절대 임포트 시도
@@ -10707,6 +10708,347 @@ def run():
         debug=False,
         processes=1
     )
+
+# ===== 자동 구매 필터 API 엔드포인트 =====
+
+@app.route('/api/auto-buy/check-duplicate', methods=['POST'])
+def api_auto_buy_check_duplicate():
+    """자동 구매 중복 확인 API
+    
+    요청:
+    {
+        "league": "Challenger|Gold|Silver|Bronze",
+        "grade": "SSS+|SSS|SS+|SS|S+|S|A+|A|B+|B|C",
+        "percent": "30|40|50|50.5|51|52|60|70|80|90",
+        "market": "KRW-BTC" (optional)
+    }
+    
+    응답:
+    {
+        "ok": true,
+        "allowed": true/false,
+        "combination": "Challenger_SSS+_50",
+        "reason": "...",
+        "purchased_combinations": [...]
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        
+        # 필수 파라미터 검증
+        league = str(data.get('league', '')).strip()
+        grade = str(data.get('grade', '')).strip()
+        percent = str(data.get('percent', '')).strip()
+        market = str(data.get('market', 'KRW-BTC')).strip()
+        
+        if not league or not grade or not percent:
+            return jsonify({
+                'ok': False,
+                'allowed': False,
+                'reason': '리그, 등급, 가격대는 필수입니다.'
+            }), 400
+        
+        # 유효성 검증
+        valid_leagues = ['Immortal', 'Legend', 'Challenger', 'Grandmaster', 'Master', 'Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze', 'Iron']
+        valid_grades = ['SSS+', 'SSS', 'SS+', 'SS', 'S+', 'S', 'A+', 'A', 'B+', 'B', 'C']
+        
+        if league not in valid_leagues:
+            return jsonify({
+                'ok': False,
+                'allowed': False,
+                'reason': f'유효하지 않은 리그: {league}'
+            }), 400
+        
+        if grade not in valid_grades:
+            return jsonify({
+                'ok': False,
+                'allowed': False,
+                'reason': f'유효하지 않은 등급: {grade}'
+            }), 400
+        
+        # percent 유효성 검증: 숫자 범위만 체크 (0-100)
+        try:
+            percent_float = float(percent)
+            if percent_float < 0 or percent_float > 100:
+                return jsonify({
+                    'ok': False,
+                    'allowed': False,
+                    'reason': f'가격대는 0~100 사이여야 합니다: {percent}'
+                }), 400
+        except ValueError:
+            return jsonify({
+                'ok': False,
+                'allowed': False,
+                'reason': f'유효하지 않은 가격대 (숫자 아님): {percent}'
+            }), 400
+        
+        # 조합 키 생성
+        combination_key = f"autoBuy_purchased_{league}_{grade}_{percent}"
+        
+        # 거래 로거 인스턴스
+        trade_logger = get_trade_logger()
+        
+        # 중복 확인 - 서버 측 저장소 및 bot_state에서 확인
+        try:
+            # AUTO_BUY_CONFIG에서 구매 기록 확인
+            auto_buy_history = AUTO_BUY_CONFIG.get('purchase_history', {})
+            
+            if combination_key in auto_buy_history:
+                purchased_at = auto_buy_history[combination_key].get('purchased_at')
+                reason = f'이 조합은 이미 구매했습니다. ({purchased_at})'
+                
+                # 로그 기록
+                trade_logger.log_auto_buy_check(league, grade, percent, False, reason)
+                
+                return jsonify({
+                    'ok': True,
+                    'allowed': False,
+                    'combination': f'{league}_{grade}_{percent}',
+                    'reason': reason,
+                    'purchased_combinations': list(auto_buy_history.keys())
+                })
+        except Exception as e:
+            logger.warning(f"자동 구매 기록 확인 실패: {e}")
+        
+        # 같은 가격대의 다른 조합이 이미 존재하는지 확인 (1% 이상 차이 검증)
+        # 가격대(percent)별로 리그/등급 조합이 중복되지 않도록 확인
+        try:
+            for existing_key in AUTO_BUY_CONFIG.get('purchase_history', {}).keys():
+                if existing_key.startswith('autoBuy_purchased_'):
+                    # 기존 조합 파싱: autoBuy_purchased_[league]_[grade]_[percent]
+                    parts = existing_key.split('_')
+                    if len(parts) >= 6:  # autoBuy + purchased + league + grade + percent
+                        existing_league = '_'.join(parts[2:-2])  # league 추출
+                        existing_grade = parts[-2]
+                        existing_percent = parts[-1]
+                        
+                        # 같은 리그/등급 조합인지 확인
+                        if existing_league == league and existing_grade == grade:
+                            try:
+                                current_pct = float(percent)
+                                existing_pct = float(existing_percent)
+                                
+                                # 가격대 차이가 1% 미만인지 확인
+                                pct_diff = abs(current_pct - existing_pct)
+                                if pct_diff < 1.0:
+                                    return jsonify({
+                                        'ok': True,
+                                        'allowed': False,
+                                        'combination': f'{league}_{grade}_{percent}',
+                                        'reason': f'같은 리그/등급의 비슷한 가격대가 이미 존재합니다 ({existing_percent}%)',
+                                        'purchased_combinations': list(AUTO_BUY_CONFIG.get('purchase_history', {}).keys())
+                                    })
+                            except ValueError:
+                                pass
+        except Exception as e:
+            logger.warning(f"가격대 중복 검증 실패: {e}")
+        
+        # 중복 없음 - 구매 허용
+        # 로그 기록
+        trade_logger.log_auto_buy_check(league, grade, percent, True, '구매 가능')
+        
+        return jsonify({
+            'ok': True,
+            'allowed': True,
+            'combination': f'{league}_{grade}_{percent}',
+            'reason': '이 조합으로 구매할 수 있습니다.',
+            'purchased_combinations': list(AUTO_BUY_CONFIG.get('purchase_history', {}).keys()),
+            'message': '조건을 만족합니다. 구매를 진행하세요.'
+        })
+        
+    except Exception as e:
+        logger.error(f"자동 구매 중복 확인 오류: {e}")
+        return jsonify({
+            'ok': False,
+            'allowed': False,
+            'reason': f'중복 확인 오류: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auto-buy/record-purchase', methods=['POST'])
+def api_auto_buy_record_purchase():
+    """자동 구매 기록 저장 API
+    
+    요청:
+    {
+        "league": "Challenger",
+        "grade": "SSS+",
+        "percent": "50",
+        "price_krw": 80500000,
+        "market": "KRW-BTC"
+    }
+    
+    응답:
+    {
+        "ok": true,
+        "message": "구매 기록이 저장되었습니다.",
+        "key": "autoBuy_purchased_Challenger_SSS+_50"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        
+        league = str(data.get('league', '')).strip()
+        grade = str(data.get('grade', '')).strip()
+        percent = str(data.get('percent', '')).strip()
+        price_krw = float(data.get('price_krw', 0))
+        market = str(data.get('market', 'KRW-BTC')).strip()
+        
+        if not league or not grade or not percent:
+            return jsonify({
+                'ok': False,
+                'reason': '리그, 등급, 가격대는 필수입니다.'
+            }), 400
+        
+        # 조합 키 생성
+        combination_key = f"autoBuy_purchased_{league}_{grade}_{percent}"
+        
+        # AUTO_BUY_CONFIG에 구매 기록 저장
+        if 'purchase_history' not in AUTO_BUY_CONFIG:
+            AUTO_BUY_CONFIG['purchase_history'] = {}
+        
+        AUTO_BUY_CONFIG['purchase_history'][combination_key] = {
+            'league': league,
+            'grade': grade,
+            'percent': percent,
+            'price_krw': price_krw,
+            'market': market,
+            'purchased_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'timestamp_ms': int(time.time() * 1000)
+        }
+        
+        # 저장
+        save_auto_buy_config()
+        
+        # 거래 로그 기록
+        trade_logger = get_trade_logger()
+        trade_logger.log_auto_buy(league, grade, percent, price_krw, 'SUCCESS', '-')
+        
+        logger.info(f"✅ 자동 구매 기록 저장: {league}_{grade}_{percent} @ {price_krw} KRW")
+        
+        return jsonify({
+            'ok': True,
+            'message': f'{league} {grade} {percent}% 조합의 구매 기록이 저장되었습니다.',
+            'key': combination_key,
+            'combination': {
+                'league': league,
+                'grade': grade,
+                'percent': percent,
+                'price_krw': price_krw,
+                'purchased_at': AUTO_BUY_CONFIG['purchase_history'][combination_key]['purchased_at']
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"자동 구매 기록 저장 오류: {e}")
+        return jsonify({
+            'ok': False,
+            'reason': f'기록 저장 오류: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auto-buy/get-history', methods=['GET'])
+def api_auto_buy_get_history():
+    """자동 구매 기록 조회 API
+    
+    응답:
+    {
+        "ok": true,
+        "purchases": [...],
+        "total": 5
+    }
+    """
+    try:
+        league_filter = request.args.get('league', '').strip()
+        
+        purchases = []
+        history = AUTO_BUY_CONFIG.get('purchase_history', {})
+        
+        for key, data in history.items():
+            # 필터 적용
+            if league_filter and data.get('league') != league_filter:
+                continue
+            
+            purchases.append({
+                'key': key,
+                'league': data.get('league'),
+                'grade': data.get('grade'),
+                'percent': data.get('percent'),
+                'price_krw': data.get('price_krw'),
+                'purchased_at': data.get('purchased_at'),
+                'timestamp_ms': data.get('timestamp_ms')
+            })
+        
+        # 최신 순으로 정렬
+        purchases.sort(key=lambda x: x.get('timestamp_ms', 0), reverse=True)
+        
+        return jsonify({
+            'ok': True,
+            'purchases': purchases,
+            'total': len(purchases),
+            'leagues': list(set(p['league'] for p in purchases))
+        })
+        
+    except Exception as e:
+        logger.error(f"자동 구매 기록 조회 오류: {e}")
+        return jsonify({
+            'ok': False,
+            'reason': f'조회 오류: {str(e)}'
+        }), 500
+
+
+@app.route('/api/auto-buy/clear-history', methods=['POST'])
+def api_auto_buy_clear_history():
+    """자동 구매 기록 초기화 API (관리자용)
+    
+    요청 (선택):
+    {
+        "league": "Challenger" // 특정 리그만 초기화
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        league_filter = str(data.get('league', '')).strip()
+        
+        if 'purchase_history' not in AUTO_BUY_CONFIG:
+            AUTO_BUY_CONFIG['purchase_history'] = {}
+        
+        history = AUTO_BUY_CONFIG['purchase_history']
+        
+        if league_filter:
+            # 특정 리그 제거
+            keys_to_remove = [k for k, v in history.items() if v.get('league') == league_filter]
+            for key in keys_to_remove:
+                del history[key]
+            save_auto_buy_config()
+            
+            logger.info(f"✅ {league_filter} 리그 구매 기록 초기화 ({len(keys_to_remove)}개)")
+            
+            return jsonify({
+                'ok': True,
+                'message': f'{league_filter} 리그 구매 기록이 초기화되었습니다.',
+                'removed_count': len(keys_to_remove)
+            })
+        else:
+            # 전체 초기화
+            removed_count = len(history)
+            history.clear()
+            save_auto_buy_config()
+            
+            logger.info(f"✅ 전체 자동 구매 기록 초기화 ({removed_count}개)")
+            
+            return jsonify({
+                'ok': True,
+                'message': f'전체 구매 기록이 초기화되었습니다.',
+                'removed_count': removed_count
+            })
+        
+    except Exception as e:
+        logger.error(f"자동 구매 기록 초기화 오류: {e}")
+        return jsonify({
+            'ok': False,
+            'reason': f'초기화 오류: {str(e)}'
+        }), 500
 
 
 if __name__ == "__main__":
