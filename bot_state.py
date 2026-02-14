@@ -10,6 +10,9 @@ from pathlib import Path
 # Auto-buy config file path
 AUTO_BUY_CONFIG_FILE = Path('data/auto_buy.json')
 
+# Auto-sell config file path
+AUTO_SELL_CONFIG_FILE = Path('data/auto_sell.json')
+
 # Default auto-buy configuration
 AUTO_BUY_CONFIG = {
     'enabled': False,
@@ -58,8 +61,55 @@ def save_auto_buy_config():
         print(f"❌ Failed to save auto-buy config: {e}")
         return False
 
+# Default auto-sell configuration
+AUTO_SELL_CONFIG = {
+    'enabled': False,
+    'market': 'KRW-BTC',
+    'target_profit_rate': 1.0,
+    'sell_mode': 'profit_first',
+    'sell_count': 1,
+    'cooldown_sec': 300,
+    'zone_condition': False,
+    'ml_trust_adjust': False,
+    'last_check': None,
+    'last_sell': None
+}
+
+def load_auto_sell_config():
+    """Load auto-sell configuration from file."""
+    global AUTO_SELL_CONFIG
+    try:
+        if AUTO_SELL_CONFIG_FILE.exists():
+            with open(AUTO_SELL_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    for key in AUTO_SELL_CONFIG.keys():
+                        if key in data:
+                            AUTO_SELL_CONFIG[key] = data[key]
+                    print(f"✅ Auto-sell config loaded: enabled={AUTO_SELL_CONFIG.get('enabled')}, target={AUTO_SELL_CONFIG.get('target_profit_rate')}%")
+                    return True
+        else:
+            print(f"⚠️ Auto-sell config file not found: {AUTO_SELL_CONFIG_FILE}")
+            save_auto_sell_config()
+    except Exception as e:
+        print(f"❌ Failed to load auto-sell config: {e}")
+    return False
+
+def save_auto_sell_config():
+    """Save auto-sell configuration to file."""
+    try:
+        AUTO_SELL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(AUTO_SELL_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(AUTO_SELL_CONFIG, f, indent=2, ensure_ascii=False)
+        print(f"💾 Auto-sell config saved: enabled={AUTO_SELL_CONFIG.get('enabled')}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to save auto-sell config: {e}")
+        return False
+
 # Load config on module import
 load_auto_buy_config()
+load_auto_sell_config()
 
 # Bot controller for start/stop from UI
 bot_ctrl = {

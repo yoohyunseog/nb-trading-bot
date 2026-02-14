@@ -87,7 +87,7 @@ from trade import Trader, TradeConfig
 from rating_ml_v2 import get_ml_system_v2
 from rating_ml_v3 import get_lstm_model  # LSTM 딥러닝 모델
 from helpers.rating_ml import get_rating_ml  # Legacy support
-from bot_state import bot_ctrl, AUTO_BUY_CONFIG, save_auto_buy_config
+from bot_state import bot_ctrl, AUTO_BUY_CONFIG, save_auto_buy_config, AUTO_SELL_CONFIG, save_auto_sell_config
 
 # BIT calculation functions
 from helpers.features import BIT_MAX_NB, BIT_MIN_NB

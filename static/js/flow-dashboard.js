@@ -94,6 +94,8 @@ const FlowDashboard = (() => {
     marketData: null,
     signalData: null,
     tradeData: null,
+    chartData: null,
+    chartOptions: null,
     nbWave: null,
     nbWaveZones: null,
     zoneSeries: null,
@@ -230,6 +232,35 @@ const FlowDashboard = (() => {
     } catch (err) {
       console.error('POST fail', path, err);
       return { ok: false, error: String(err) };
+    }
+  }
+
+  function buildChartSnapshot() {
+    try {
+      const candles = Array.isArray(window.candleDataCache)
+        ? window.candleDataCache.slice()
+        : [];
+      const interval = state.selectedInterval || 'unknown';
+      const snapshot = {
+        version: 'flow-dashboard.chart.v1',
+        timestamp: new Date().toISOString(),
+        interval,
+        totalCandles: candles.length,
+        candles,
+        ohlcv: Array.isArray(state.chartData?.data) ? state.chartData.data : [],
+        nbWave: state.nbWave || null,
+        nbStats: state.nbStats || null,
+        mlStats: state.mlStats || null,
+        currentZone: state.currentZone || null,
+        currentCard: window.ccCurrentData || null,
+        currentRating: window.ccCurrentRating || null,
+        marketData: state.marketData || null,
+        chartOptions: state.chartOptions || null
+      };
+      return snapshot;
+    } catch (err) {
+      console.warn('Chart snapshot build error:', err?.message);
+      return null;
     }
   }
 
@@ -406,14 +437,61 @@ const FlowDashboard = (() => {
 
   function calculateAndDisplayCardRating(params) {
     try {
-      const res = computeCardCodeFS(params);
+      // 신호 패널 상태 확인
+      const nbZoneCheck = document.getElementById('nbZoneCheck');
+      const mlTrustCheck = document.getElementById('mlTrustCheck');
+      
+      const isNBZoneSelected = nbZoneCheck && nbZoneCheck.checked;
+      const isMLTrustSelected = mlTrustCheck && mlTrustCheck.checked;
+      
+      // N/B Zone과 ML Trust 선택값 가져오기 (드롭다운도 지원)
+      const ccNBZoneSelect = document.getElementById('ccNBZoneSelect');
+      const ccMLTrustSelect = document.getElementById('ccMLTrustSelect');
+      
+      let overrideZone = null;
+      let overrideMLTrust = null;
+      
+      // 신호 패널 체크박스 우선도가 높음
+      if (isNBZoneSelected) {
+        // N/B ZONE 선택: BLUE로 고정
+        overrideZone = 'BLUE';
+      } else if (isMLTrustSelected) {
+        // ML TRUST 선택: ORANGE로 고정 (ML 기반 약화)
+        overrideZone = 'ORANGE';
+      } else if (ccNBZoneSelect && ccNBZoneSelect.value) {
+        overrideZone = ccNBZoneSelect.value;
+      }
+      
+      if (ccMLTrustSelect && ccMLTrustSelect.value) {
+        overrideMLTrust = parseInt(ccMLTrustSelect.value) || null;
+      }
+      
+      // 선택된 Zone 또는 자동 Zone 사용
+      const zoneToUse = overrideZone || String(params.nbLastZone || '').toUpperCase();
+      
+      // 선택된 ML Trust 또는 실제 값 사용
+      const mlTrustToUse = overrideMLTrust !== null ? overrideMLTrust : params.mlTrust;
+      
+      // params 수정하여 카드 계산
+      const modifiedParams = {
+        ...params,
+        nbLastZone: zoneToUse,
+        mlTrust: mlTrustToUse
+      };
+      
+      const res = computeCardCodeFS(modifiedParams);
       const ratingDisplay = document.getElementById('ccRatingDisplay');
       const ratingScore = document.getElementById('ccRatingScore');
       const ratingSection = document.getElementById('ccRatingSection');
       
-      // 부호 결정: 현재 zone 기반 (nbLastZone)
-      const currentZone = String(params.nbLastZone || '').toUpperCase();
-      const enhancementSign = (currentZone === 'BLUE') ? '+' : (currentZone === 'ORANGE') ? '-' : '+';
+      // 현재 카드 계산 파라미터 저장 (신호 패널 변경 시 재계산용)
+      window.currentCardCalcParams = params;
+      
+      // 부호 결정: N/B ZONE 선택값 기반
+      // BLUE 선택 → + 강화
+      // ORANGE 선택 → - 강화
+      // NEUTRAL 선택 또는 자동 → + 강화 (기본값)
+      const enhancementSign = (zoneToUse === 'BLUE') ? '+' : (zoneToUse === 'ORANGE') ? '-' : '+';
       
       if (ratingDisplay && ratingScore && ratingSection) {
         ratingDisplay.innerHTML = `<span style="color:${res.color};">${res.code}</span> <span style="color:#ffd700;font-size:12px;">${enhancementSign}${res.enhancement}강</span>`;
@@ -1737,7 +1815,7 @@ const FlowDashboard = (() => {
         }
         let chart = container._chartInstance;
         if (!chart) {
-          chart = LightweightCharts.createChart(container, {
+          const chartOptions = {
             autoSize: true,
             layout: { background: { type: 'solid', color: '#0b1220' }, textColor: '#e6eefc' },
             grid: {
@@ -1756,7 +1834,9 @@ const FlowDashboard = (() => {
             crosshair: { mode: LightweightCharts.CrosshairMode.Magnet },
             handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
             handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: false }  // 마우스 휠/드래그로 확대/축소 가능
-          });
+          };
+          state.chartOptions = chartOptions;
+          chart = LightweightCharts.createChart(container, chartOptions);
           container._chartInstance = chart;
           container._series = {};
           
@@ -2647,6 +2727,11 @@ const FlowDashboard = (() => {
       return data;
     },
 
+    async saveChartData(filename, data) {
+      const path = withApiBase('/api/save-chart-data');
+      return await postJson(path, { filename, data });
+    },
+
     // Step 5: NBverse current card (chart + NB stats)
     async getNbverseCard(interval, count = 300, save = true) {
       const url = `/api/nbverse/card?interval=${encodeURIComponent(interval)}&count=${count}&save=${save ? 'true' : 'false'}`;
@@ -3298,7 +3383,7 @@ const FlowDashboard = (() => {
       blueOnlyChk: null,
       progressTrack: null,
       progressBar: null,
-      countdownLabel: null,
+      countdownLabel: null
     },
 
     bindUI() {
@@ -3314,14 +3399,7 @@ const FlowDashboard = (() => {
         this.elements.intervalSel = document.getElementById('autoBuyInterval');
         this.elements.amountInput = document.getElementById('autoBuyAmount');
         this.elements.blueOnlyChk = document.getElementById('autoBuyBlueOnly');
-        this.elements.noDuplicateChk = document.getElementById('autoBuyNoDuplicate');
-        this.elements.higherGradeChk = document.getElementById('autoBuyHigherGrade');
-        this.elements.blueCardOnlyChk = document.getElementById('autoBuyBlueCardOnly');
-        this.elements.modeIntervalChk = document.getElementById('autoBuyModeInterval');
-        this.elements.modeWaitChk = document.getElementById('autoBuyModeWait');
-        this.elements.waitTimeInput = document.getElementById('autoBuyWaitTime');
-        this.elements.logContainer = document.getElementById('autoBuyLogContainer');
-        
+
         // ===== 새로운 프로그레스바 요소들 =====
         this.elements.waitPhaseEl = document.getElementById('abWaitPhase');
         this.elements.buyingPhaseEl = document.getElementById('abBuyingPhase');
@@ -3329,6 +3407,8 @@ const FlowDashboard = (() => {
         this.elements.progressBar = document.getElementById('abProgressBar');
         this.elements.countdownLabel = document.getElementById('abNextText');
 
+
+    
         // ===== 카드 필터 요소들 (NEW) =====
         this.elements.leagueSelect = document.getElementById('autoBuyLeague');
         this.elements.gradeSelect = document.getElementById('autoBuyGrade');
@@ -4562,6 +4642,7 @@ const FlowDashboard = (() => {
         console.log('Step 4 started: Chart rendering');
         try {
           const chartData = await API.getChartData(state.selectedInterval);
+          state.chartData = chartData;
           const rows = chartData?.data || [];
           console.log('📊 Step 4 - OHLCV rows:', rows.length, 'ok:', chartData?.ok);
           
@@ -4844,6 +4925,20 @@ const FlowDashboard = (() => {
           
           localStorage.setItem('dashboardStateSnapshot', JSON.stringify(stateSnapshot));
           console.log('✅ State snapshot saved at Step 10');
+
+          const chartSnapshot = buildChartSnapshot();
+          if (chartSnapshot) {
+            const intervalSafe = String(chartSnapshot.interval || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const filename = `chart_data_${intervalSafe}_${Date.now()}.json`;
+            const saveResult = await API.saveChartData(filename, chartSnapshot);
+            if (saveResult?.ok) {
+              UI.notify('차트 JSON 저장 완료', 'success');
+              console.log('✅ Chart JSON saved:', saveResult?.data || saveResult);
+            } else {
+              UI.notify('차트 JSON 저장 실패', 'warning');
+              console.warn('⚠️ Chart JSON save failed:', saveResult?.error || saveResult);
+            }
+          }
         } catch (err) {
           console.warn('⚠️ State snapshot save error:', err?.message);
         }
@@ -5124,6 +5219,31 @@ async function loadAssets7() {
 document.addEventListener('DOMContentLoaded', () => {
   const sticky = document.getElementById('assetStickyBar');
   if (sticky) sticky.style.display = '';
+  
+  // N/B Zone 선택 시 카드 등급 업데이트
+  const ccNBZoneSelect = document.getElementById('ccNBZoneSelect');
+  if (ccNBZoneSelect) {
+    ccNBZoneSelect.addEventListener('change', () => {
+      if (window.ccCurrentData && window.ccCurrentRating) {
+        calculateAndDisplayCardRating(window.ccCurrentData);
+      }
+    });
+  }
+  
+  // ML Trust 입력 시 카드 등급 업데이트
+  const ccMLTrustSelect = document.getElementById('ccMLTrustSelect');
+  if (ccMLTrustSelect) {
+    ccMLTrustSelect.addEventListener('change', () => {
+      if (window.ccCurrentData && window.ccCurrentRating) {
+        calculateAndDisplayCardRating(window.ccCurrentData);
+      }
+    });
+    ccMLTrustSelect.addEventListener('input', () => {
+      if (window.ccCurrentData && window.ccCurrentRating) {
+        calculateAndDisplayCardRating(window.ccCurrentData);
+      }
+    });
+  }
 });
 
 // ============================================================================
@@ -7151,4 +7271,552 @@ $(document).ready(function() {
     
     console.log('✅ Performance Monitor initialized (FPS style + Data Management + Step Timing)');
   })();
+  
+  // ========================================
+  // Auto Sell System
+  // ========================================
+  window.AutoSellManager = {
+    enabled: false,
+    running: false,
+    config: {
+      target_profit_rate: 1.0,
+      sell_mode: 'profit_first',
+      sell_count: 1,
+      cooldown_sec: 300,
+      zone_condition: false,
+      ml_trust_adjust: false
+    },
+    lastSellTime: 0,
+    checkInterval: null,
+    progressInterval: null,
+    lastServerStatus: null,
+    
+    elements: {
+      toggleBtn: null,
+      profitRateInput: null,
+      sellModeSelect: null,
+      sellCountSelect: null,
+      cooldownSelect: null,
+      orangeOnlyChk: null,
+      mlTrustChk: null,
+      logContainer: null,
+      eligibleCardsEl: null,
+      statusText: null,
+      progressBar: null
+    },
+    
+    init() {
+      console.log('🔴 Auto Sell Manager initializing...');
+      this.bindUI();
+      this.loadConfig();
+      this.startMonitoring();
+    },
+    
+    bindUI() {
+      this.elements.toggleBtn = document.getElementById('autoSellToggle');
+      this.elements.profitRateInput = document.getElementById('autoSellProfitRate');
+      this.elements.sellModeSelect = document.getElementById('autoSellMode');
+      this.elements.sellCountSelect = document.getElementById('autoSellCount');
+      this.elements.cooldownSelect = document.getElementById('autoSellCooldown');
+      this.elements.orangeOnlyChk = document.getElementById('autoSellOrangeOnly');
+      this.elements.mlTrustChk = document.getElementById('autoSellMLTrustAdjust');
+      this.elements.logContainer = document.getElementById('autoSellLogContainer');
+      this.elements.eligibleCardsEl = document.getElementById('autoSellEligibleCards');
+      this.elements.availableCountEl = document.getElementById('autoSellAvailableCount');
+      this.elements.statusText = document.getElementById('asSellStatusText');
+      this.elements.progressBar = document.getElementById('asSellProgressBar');
+      
+      if (!this.elements.toggleBtn) {
+        console.warn('⚠️ Auto Sell UI not found');
+        return;
+      }
+      
+      this.elements.toggleBtn.addEventListener('click', () => this.toggle());
+      
+      // Save config on change
+      [this.elements.profitRateInput, this.elements.sellModeSelect, 
+       this.elements.sellCountSelect, this.elements.cooldownSelect,
+       this.elements.orangeOnlyChk, this.elements.mlTrustChk].forEach(el => {
+        if (el) el.addEventListener('change', () => this.saveConfig());
+      });
+      
+      console.log('✅ Auto Sell UI bound');
+    },
+    
+    async loadConfig() {
+      try {
+        // localStorage에서 먼저 로드 시도
+        const savedState = localStorage.getItem('autoSellConfig');
+        if (savedState) {
+          const fullState = JSON.parse(savedState);
+          this.config = fullState.config || this.config;
+          this.running = fullState.running || false;
+          this.updateUI();
+          console.log('✅ Auto Sell 상태 복원 (running:', this.running, ')');
+          return;
+        }
+        
+        // 없으면 서버에서 로드
+        const resp = await fetch('/api/auto-sell/config');
+        const data = await resp.json();
+        if (data.ok && data.config) {
+          this.config = data.config;
+          this.updateUI();
+          this.saveConfigToStorage();
+          console.log('✅ Auto Sell config loaded from server');
+        }
+      } catch (e) {
+        console.error('Auto Sell config load error:', e);
+      }
+    },
+    
+    async saveConfig() {
+      this.config.target_profit_rate = parseFloat(this.elements.profitRateInput?.value || 1.0);
+      this.config.sell_mode = this.elements.sellModeSelect?.value || 'profit_first';
+      this.config.sell_count = parseInt(this.elements.sellCountSelect?.value || 1);
+      this.config.cooldown_sec = parseInt(this.elements.cooldownSelect?.value || 300);
+      this.config.zone_condition = this.elements.orangeOnlyChk?.checked || false;
+      this.config.ml_trust_adjust = this.elements.mlTrustChk?.checked || false;
+      
+      // localStorage 저장
+      this.saveConfigToStorage();
+      
+      try {
+        await fetch('/api/auto-sell/config', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.config)
+        });
+      } catch (e) {
+        console.error('Auto Sell config save error:', e);
+      }
+    },
+    
+    saveConfigToStorage() {
+      try {
+        const fullState = {
+          config: this.config,
+          running: this.running,
+          enabled: this.config.enabled
+        };
+        localStorage.setItem('autoSellConfig', JSON.stringify(fullState));
+        console.log('💾 Auto Sell 상태 저장 (running:', this.running, ')');
+      } catch (e) {
+        console.error('Failed to save Auto Sell config to localStorage:', e);
+      }
+    },
+    
+    updateUI() {
+      if (this.elements.profitRateInput) this.elements.profitRateInput.value = this.config.target_profit_rate;
+      if (this.elements.sellModeSelect) this.elements.sellModeSelect.value = this.config.sell_mode;
+      if (this.elements.sellCountSelect) this.elements.sellCountSelect.value = this.config.sell_count;
+      if (this.elements.cooldownSelect) this.elements.cooldownSelect.value = this.config.cooldown_sec;
+      if (this.elements.orangeOnlyChk) this.elements.orangeOnlyChk.checked = this.config.zone_condition;
+      if (this.elements.mlTrustChk) this.elements.mlTrustChk.checked = this.config.ml_trust_adjust;
+      
+      // 버튼 상태 업데이트
+      this.updateButtonState();
+    },
+    
+    updateButtonState() {
+      if (this.elements.toggleBtn) {
+        if (this.running) {
+          this.elements.toggleBtn.textContent = '⏸️ 중지';
+          this.elements.toggleBtn.className = 'btn btn-sm btn-danger w-100';
+        } else {
+          this.elements.toggleBtn.textContent = '▶️ 시작';
+          this.elements.toggleBtn.className = 'btn btn-sm btn-outline-danger w-100';
+        }
+      }
+    },
+    
+    async toggle() {
+      if (this.running) {
+        await this.stop();
+      } else {
+        await this.start();
+      }
+    },
+    
+    async start() {
+      this.running = true;
+      this.config.enabled = true;
+      await this.saveConfig();
+      
+      if (this.elements.toggleBtn) {
+        this.elements.toggleBtn.textContent = '⏸️ 중지';
+        this.elements.toggleBtn.className = 'btn btn-sm btn-danger w-100';
+      }
+      
+      this.addLog('✅ Auto Sell 시작');
+      console.log('🔴 Auto Sell started');
+      // ensure progress updater runs
+      if (!this.progressInterval) {
+        this.progressInterval = setInterval(() => this.updateProgress(), 1000);
+      }
+    },
+    
+    async stop() {
+      this.running = false;
+      this.config.enabled = false;
+      await this.saveConfig();
+      
+      if (this.elements.toggleBtn) {
+        this.elements.toggleBtn.textContent = '▶️ 시작';
+        this.elements.toggleBtn.className = 'btn btn-sm btn-outline-danger w-100';
+      }
+      
+      this.addLog('⏸️ Auto Sell 중지');
+      console.log('🔴 Auto Sell stopped');
+      if (this.progressInterval) {
+        clearInterval(this.progressInterval);
+        this.progressInterval = null;
+      }
+      this.setProgress(0, '중지');
+    },
+    
+    startMonitoring() {
+      // Check every 5 seconds
+      this.checkInterval = setInterval(() => {
+        this.checkAndSell();
+      }, 5000);
+      
+      // Initial check
+      setTimeout(() => this.checkAndSell(), 1000);
+    },
+    
+    async checkAndSell() {
+      if (!this.running) {
+        this.updateEligibleCards([]);
+        return;
+      }
+      
+      try {
+        const resp = await fetch('/api/auto-sell/status');
+        const data = await resp.json();
+        
+        if (!data.ok) return;
+        
+        this.updateEligibleCards(data.eligible_cards || []);
+        // store latest server status for progress calculations
+        this.lastServerStatus = data;
+        
+        // Check cooldown
+        if (!data.can_sell) {
+          const remaining = data.next_sell_time - data.server_time;
+          this.addLog(`⏳ 쿨다운: ${remaining}초 남음`);
+          this.setProgressFromServerStatus(data);
+          return;
+        }
+        
+        // Check if eligible cards exist
+        if (data.eligible_count === 0) {
+          this.addLog(`⏸️ 조건 충족 카드 없음 (목표: ${this.config.target_profit_rate}%)`);
+          return;
+        }
+        
+        // Check zone condition (skip when ML trust option is enabled)
+        if (this.config.zone_condition && !this.config.ml_trust_adjust) {
+          const zone = window.currentNBZone || 'NEUTRAL';
+          if (zone !== 'ORANGE') {
+            this.addLog(`⏸️ Zone 조건 미충족 (현재: ${zone}, 필요: ORANGE)`);
+            return;
+          }
+        }
+        
+        // Sell eligible cards
+        let toSell = [];
+        // If sell_count is 0 treat as 'sell all' (UI option value 0)
+        if (this.config.sell_count === 0) {
+          toSell = data.eligible_cards;
+        } else {
+          toSell = data.eligible_cards.slice(0, this.config.sell_count);
+        }
+        
+        for (const card of toSell) {
+          await this.sellCard(card);
+          // Wait between sells
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        // After sells, refresh progress using server-provided cooldown info (if any)
+        try {
+          const resp2 = await fetch('/api/auto-sell/status');
+          const refreshed = await resp2.json();
+          if (refreshed.ok) {
+            this.lastServerStatus = refreshed;
+            this.setProgressFromServerStatus(refreshed);
+          }
+        } catch (e) {
+          // ignore
+        }
+        
+      } catch (e) {
+        console.error('Auto Sell check error:', e);
+        this.addLog(`❌ 오류: ${e.message}`);
+      }
+    },
+    
+    async sellCard(card) {
+      try {
+        this.addLog(`🔄 매도 시도: +${card.profit_rate}% (${card.buy_price.toLocaleString()}원)`);
+        
+        // TODO: Implement actual sell API call
+        // const resp = await fetch('/api/trade/sell', {
+        //   method: 'POST',
+        //   headers: {'Content-Type': 'application/json'},
+        //   body: JSON.stringify({
+        //     card_id: card.card_id,
+        //     size: card.size,
+        //     price: card.current_price
+        //   })
+        // });
+        
+        // For now, just log
+        this.addLog(`✅ 매도 완료: +${card.profit_rate}% (수익: ${Math.round((card.current_price - card.buy_price) * card.size).toLocaleString()}원)`);
+        
+        // Update last sell time
+        this.lastSellTime = Date.now();
+        
+      } catch (e) {
+        console.error('Sell error:', e);
+        this.addLog(`❌ 매도 실패: ${e.message}`);
+      }
+    },
+    
+    updateEligibleCards(cards) {
+      if (!this.elements.eligibleCardsEl) return;
+      if (this.elements.availableCountEl) {
+        try { this.elements.availableCountEl.textContent = `매도 가능: ${cards.length}장`; } catch (e) {}
+      }
+      
+      if (cards.length === 0) {
+        this.elements.eligibleCardsEl.innerHTML = '<div style="color:#9aa8c2;">조건 충족 카드 없음</div>';
+        return;
+      }
+      
+      const html = cards.map((card, idx) => {
+        const profit = (card.current_price - card.buy_price) * card.size;
+        const color = card.profit_rate >= this.config.target_profit_rate ? '#0ecb81' : '#9aa8c2';
+        return `<div style="color:${color}; padding:2px 0;">
+          ${idx + 1}. +${card.profit_rate}% | ${card.buy_price.toLocaleString()} → ${card.current_price.toLocaleString()} (+${Math.round(profit).toLocaleString()}원)
+        </div>`;
+      }).join('');
+      
+      this.elements.eligibleCardsEl.innerHTML = html;
+    },
+    
+    addLog(msg) {
+      if (!this.elements.logContainer) return;
+      
+      const time = new Date().toLocaleTimeString('ko-KR');
+      const logEntry = `[${time}] ${msg}`;
+      
+      const div = document.createElement('div');
+      div.textContent = logEntry;
+      div.style.padding = '2px 0';
+      
+      this.elements.logContainer.insertBefore(div, this.elements.logContainer.firstChild);
+      
+      // Keep only last 20 logs
+      while (this.elements.logContainer.children.length > 20) {
+        this.elements.logContainer.removeChild(this.elements.logContainer.lastChild);
+      }
+    },
+
+    setProgress(percent, label) {
+      if (this.elements.progressBar) {
+        try {
+          const p = Math.max(0, Math.min(100, Math.round(percent)));
+          if (this.elements.progressBar.style) this.elements.progressBar.style.width = `${p}%`;
+          try { this.elements.progressBar.textContent = `${p}%`; } catch(e) {}
+        } catch (e) {}
+      }
+      if (this.elements.statusText) {
+        try { this.elements.statusText.textContent = label; } catch (e) {}
+      }
+    },
+
+    setProgressFromServerStatus(data) {
+      try {
+        const cooldown = parseInt(data.cooldown_sec || this.config.cooldown_sec || 0);
+        if (!cooldown || cooldown <= 0) {
+          this.setProgress(100, '대기');
+          return;
+        }
+        const server_time = parseInt(data.server_time || Math.floor(Date.now()/1000));
+        const next = parseInt(data.next_sell_time || 0);
+        const remaining = Math.max(0, next - server_time);
+        const elapsed = cooldown - remaining;
+        const pct = cooldown > 0 ? (elapsed / cooldown) * 100 : 100;
+        this.setProgress(pct, remaining > 0 ? `쿨다운: ${remaining}초 남음` : '준비 완료');
+      } catch (e) {
+        this.setProgress(0, '대기');
+      }
+    },
+
+    updateProgress() {
+      if (this.lastServerStatus) {
+        this.setProgressFromServerStatus(this.lastServerStatus);
+      }
+    }
+  };
+  
+  // ============================================================================
+  // SIGNAL PANEL MANAGER (신호 패널 관리)
+  // ============================================================================
+  
+  // 신호 패널 상태 저장
+  window.saveSignalPanelState = function() {
+    try {
+      const nbZoneCheck = document.getElementById('nbZoneCheck');
+      const mlTrustCheck = document.getElementById('mlTrustCheck');
+      
+      const state = {
+        nbZoneChecked: nbZoneCheck ? nbZoneCheck.checked : false,
+        mlTrustChecked: mlTrustCheck ? mlTrustCheck.checked : false
+      };
+      
+      localStorage.setItem('signalPanelState', JSON.stringify(state));
+      console.log('💾 신호 패널 상태 저장:', state);
+    } catch (e) {
+      console.error('Failed to save signal panel state:', e);
+    }
+  };
+  
+  // 신호 패널 상태 복원
+  window.loadSignalPanelState = function() {
+    try {
+      const savedState = localStorage.getItem('signalPanelState');
+      if (!savedState) return;
+      
+      const state = JSON.parse(savedState);
+      const nbZoneCheck = document.getElementById('nbZoneCheck');
+      const mlTrustCheck = document.getElementById('mlTrustCheck');
+      
+      if (nbZoneCheck) nbZoneCheck.checked = state.nbZoneChecked;
+      if (mlTrustCheck) mlTrustCheck.checked = state.mlTrustChecked;
+      
+      console.log('✅ 신호 패널 상태 복원:', state);
+    } catch (e) {
+      console.error('Failed to load signal panel state:', e);
+    }
+  };
+  
+  window.updateSignalPanel = function() {
+    // 현재 ZONE 상태 확인
+    let currentZone = null;
+    if (window.nbWaveZonesConsole && window.nbWaveZonesConsole.length > 0) {
+      currentZone = window.nbWaveZonesConsole[window.nbWaveZonesConsole.length - 1];
+    } else if (state.nbWaveZones && state.nbWaveZones.length > 0) {
+      currentZone = state.nbWaveZones[state.nbWaveZones.length - 1];
+    }
+    
+    // 현재 ML Trust 값 확인
+    const mlTrustValue = window.mlTrust || 0;
+    
+    // N/B ZONE 업데이트 (BLUE일 때만 체크)
+    const nbZoneCheck = document.getElementById('nbZoneCheck');
+    const nbZoneText = document.getElementById('nbZoneText');
+    const nbZoneBadge = document.getElementById('nbZoneBadge');
+    
+    const mlTrustCheck = document.getElementById('mlTrustCheck');
+    const mlTrustText = document.getElementById('mlTrustText');
+    const mlTrustBadge = document.getElementById('mlTrustBadge');
+    
+    
+    const userNbSelected = nbZoneCheck && nbZoneCheck.checked;
+    const userMlSelected = mlTrustCheck && mlTrustCheck.checked;
+
+    if (currentZone === 'BLUE') {
+      if (nbZoneCheck && !userMlSelected) nbZoneCheck.checked = true;
+      if (mlTrustCheck && !userNbSelected) mlTrustCheck.checked = false; // 다른 것 언체크
+      if (nbZoneText) nbZoneText.textContent = 'BLUE';
+      if (nbZoneBadge) {
+        nbZoneBadge.className = 'badge bg-success';
+        nbZoneBadge.textContent = '✓ BLUE';
+      }
+      if (mlTrustBadge) {
+        mlTrustBadge.className = 'badge bg-secondary';
+        mlTrustBadge.textContent = `${mlTrustValue}%`;
+      }
+    } else if (currentZone === 'ORANGE') {
+      if (nbZoneCheck && !userMlSelected) nbZoneCheck.checked = false;
+      if (mlTrustCheck && !userNbSelected) mlTrustCheck.checked = false; // 다른 것 언체크
+      if (nbZoneText) nbZoneText.textContent = 'ORANGE';
+      if (nbZoneBadge) {
+        nbZoneBadge.className = 'badge bg-warning text-dark';
+        nbZoneBadge.textContent = '✗ ORANGE';
+      }
+      if (mlTrustBadge) {
+        mlTrustBadge.className = 'badge bg-secondary';
+        mlTrustBadge.textContent = `${mlTrustValue}%`;
+      }
+    } else {
+      if (nbZoneCheck && !userMlSelected) nbZoneCheck.checked = false;
+      if (mlTrustCheck && !userNbSelected) mlTrustCheck.checked = false;
+      if (nbZoneText) nbZoneText.textContent = '-';
+      if (nbZoneBadge) {
+        nbZoneBadge.className = 'badge bg-secondary';
+        nbZoneBadge.textContent = '대기';
+      }
+      if (mlTrustBadge) {
+        mlTrustBadge.className = 'badge bg-secondary';
+        mlTrustBadge.textContent = '대기';
+      }
+    }
+    
+    // ML TRUST 값 표시
+    if (mlTrustText) mlTrustText.textContent = `${mlTrustValue}%`;
+  };
+
+  // 신호 패널 체크박스 이벤트 리스너 설정
+  window.setupSignalPanelListeners = function() {
+    const nbZoneCheck = document.getElementById('nbZoneCheck');
+    const mlTrustCheck = document.getElementById('mlTrustCheck');
+    
+    if (nbZoneCheck) {
+      nbZoneCheck.addEventListener('change', function() {
+        if (this.checked) {
+          // N/B ZONE 체크 → ML TRUST 언체크
+          if (mlTrustCheck) mlTrustCheck.checked = false;
+          console.log('✓ N/B ZONE 선택됨 (BLUE 강화 모드)');
+        }
+        window.saveSignalPanelState();
+        // 카드 등급 즉시 업데이트
+        if (window.currentCardCalcParams) {
+          calculateAndDisplayCardRating(window.currentCardCalcParams);
+        }
+      });
+    }
+    
+    if (mlTrustCheck) {
+      mlTrustCheck.addEventListener('change', function() {
+        if (this.checked) {
+          // ML TRUST 체크 → N/B ZONE 언체크
+          if (nbZoneCheck) nbZoneCheck.checked = false;
+          console.log('✓ ML TRUST 선택됨 (ORANGE 약화 모드)');
+        }
+        window.saveSignalPanelState();
+        // 카드 등급 즉시 업데이트
+        if (window.currentCardCalcParams) {
+          calculateAndDisplayCardRating(window.currentCardCalcParams);
+        }
+      });
+    }
+  };
+
+  // Initialize Auto Sell when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.AutoSellManager.init();
+      window.loadSignalPanelState();
+      window.setupSignalPanelListeners();
+      window.updateSignalPanel();
+    });
+  } else {
+    window.AutoSellManager.init();
+    window.loadSignalPanelState();
+    window.setupSignalPanelListeners();
+    window.updateSignalPanel();
+  }
 });

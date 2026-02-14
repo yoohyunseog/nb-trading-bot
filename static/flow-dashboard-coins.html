@@ -233,13 +233,15 @@
           </div>
         </div>
         
-        <!-- Center: Graph -->
+        <!-- Center: Chart + Auto Buy + Auto Sell -->
         <div class="col-lg-6">
-          <div class="graph-container" id="step2Graph">
+          <!-- Chart Container -->
+          <div class="graph-container" id="step2Graph" style="height: 1050px; margin-bottom: 15px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px;">
             <!-- LightweightCharts will be rendered here -->
           </div>
+          
           <!-- Auto Buy Strategy -->
-          <div class="card border-info rounded-3 p-3 mt-3" style="background: linear-gradient(135deg, rgba(0,209,255,0.08), rgba(14,20,36,0.6));">
+          <div class="card border-info rounded-3 p-3" style="background: linear-gradient(135deg, rgba(0,209,255,0.08), rgba(14,20,36,0.6));">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <div>
                 <h6 class="m-0" style="color:#00d1ff; font-weight:700;">⚙️ Auto Buy (BLUE 지역)</h6>
@@ -432,7 +434,128 @@
               </div>
             </div>
           </div>
+
+          <!-- Auto Sell Panel -->
+          <div class="card border-danger rounded-3 p-3 mt-3" style="background: linear-gradient(135deg, rgba(246,70,93,0.1), rgba(246,70,93,0.05));">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h6 class="m-0 mb-3" style="color: #f6465d; margin:0;">⚙️ Auto Sell 설정</h6>
+              <div id="autoSellAvailableCount" style="font-size:12px; color:#ffd; margin-left:8px;">매도 가능: 0장</div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">목표 수익률 (%)</label>
+                <input id="autoSellProfitRate" type="number" value="1.0" min="0.01" max="100" step="0.01" class="form-control form-control-sm" placeholder="예: 1.5" />
+                <small class="text-muted" style="font-size:9px;">이 수익률 이상인 카드만 매도</small>
+              </div>
+            </div>
+
+            <div class="row g-2 mt-2">
+              <div class="col-6">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">매도 순서</label>
+                <select id="autoSellMode" class="form-select form-select-sm">
+                  <option value="profit_first">수익률 높은 순</option>
+                  <option value="fifo">오래된 순 (FIFO)</option>
+                  <option value="lifo">최신 순 (LIFO)</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">한 번에 매도</label>
+                <select id="autoSellCount" class="form-select form-select-sm">
+                  <option value="0">모두</option>
+                  <option value="1">1장</option>
+                  <option value="2">2장</option>
+                  <option value="3">3장</option>
+                  <option value="5">5장</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row g-2 mt-2">
+              <div class="col-12">
+                <label class="form-label" style="font-size:11px; color:#9aa8c2;">쿨다운 (초)</label>
+                <select id="autoSellCooldown" class="form-select form-select-sm">
+                  <option value="0">즉시 (0초)</option>
+                  <option value="60">60초 (1분)</option>
+                  <option value="180">180초 (3분)</option>
+                  <option value="300" selected>300초 (5분)</option>
+                  <option value="600">600초 (10분)</option>
+                  <option value="1800">1800초 (30분)</option>
+                  <option value="3600">3600초 (1시간)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row g-2 mt-2">
+              <div class="col-12">
+                <div style="margin-top:8px;">
+                  <div style="font-size:10px; font-weight:600; color:#f6465d; margin-bottom:6px;">⏱️ Auto Sell Progress</div>
+                  <div id="asSellStatusText" style="font-size:11px; color:#d9e2f3; margin-bottom:6px;">대기</div>
+                  <div class="progress" style="height:14px; background:rgba(255,255,255,0.05);">
+                    <div id="asSellProgressBar" class="progress-bar bg-danger" role="progressbar" style="width:0%; font-size:11px;">0%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto Sell 옵션 -->
+            <div class="row g-2 mt-2">
+              <div class="col-12">
+                <div style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
+                  <div style="font-size:10px; font-weight:600; color:#f6465d; margin-bottom:8px;">📋 매도 옵션</div>
+                  
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="autoSellOrangeOnly" />
+                    <label class="form-check-label" for="autoSellOrangeOnly" style="font-size:11px; color:#d9e2f3;">🟠 ORANGE Zone에서만 매도</label>
+                    <small class="text-muted" style="font-size:9px; display:block; margin-left:24px;">Zone이 ORANGE일 때만 자동 매도</small>
+                  </div>
+                  
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="autoSellMLTrustAdjust" />
+                    <label class="form-check-label" for="autoSellMLTrustAdjust" style="font-size:11px; color:#d9e2f3;">🤖 ML Trust 기반 동적 수익률</label>
+                    <small class="text-muted" style="font-size:9px; display:block; margin-left:24px;">ML Trust 높을수록 낮은 수익률에도 매도</small>
+                    <small class="text-muted" style="font-size:9px; display:block; margin-left:24px;">ML Trust 사용 시 N/B Zone 조건 무시</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center justify-content-between mt-3">
+              <button id="autoSellToggle" class="btn btn-sm btn-outline-danger w-100">▶️ 시작</button>
+            </div>
+
+            <!-- 프로그레스바 -->
+            <div class="mt-2">
+              <div id="asSellPhase" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center" style="font-size:11px; margin-bottom:4px;">
+                  <span id="asSellStatusText" style="color:#f6465d; font-weight:600;">🔄 매도 시도 중...</span>
+                  <span id="asSellTimeText" style="color:#9aa8c2;">-</span>
+                </div>
+                <div style="height:14px; background:#0e1424; border:1px solid rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; position:relative;">
+                  <div id="asSellProgressBar" style="height:100%; width:0%; background:linear-gradient(90deg,#f6465d,#ff6b9d); transition:width .25s linear"></div>
+                  <div id="asSellProgressText" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#fff; font-weight:600; text-shadow:0 0 4px #000;">-</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto Sell 로그 -->
+            <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(246,70,93,0.3); border-radius:8px; padding:10px; margin-top:12px; max-height:150px; overflow-y:auto;">
+              <div style="font-size:9px; font-weight:600; color:#f6465d; margin-bottom:6px;">📊 매도 로그</div>
+              <div id="autoSellLogContainer" style="font-size:9px; color:#d9e2f3; font-family:monospace; line-height:1.4;">
+                <div style="color:#9aa8c2;">로그 대기중...</div>
+              </div>
+            </div>
+
+            <!-- 매도 대기 카드 미리보기 -->
+            <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(246,70,93,0.3); border-radius:8px; padding:10px; margin-top:12px;">
+              <div style="font-size:9px; font-weight:600; color:#f6465d; margin-bottom:6px;">🎯 매도 대기 카드</div>
+              <div id="autoSellEligibleCards" style="font-size:9px; color:#d9e2f3; font-family:monospace; line-height:1.4; max-height:120px; overflow-y:auto;">
+                <div style="color:#9aa8c2;">대기 중...</div>
+              </div>
+            </div>
+          </div>
         </div>
+
         
         <!-- Right: Production N/B Card (생산 N/B Card) -->
         <div class="col-lg-3">
@@ -540,13 +663,38 @@
             </div>
 
             <!-- N/B Zone & ML Trust -->
+            <div class="row g-2" id="signalPanel">
+              <!-- N/B ZONE 신호 -->
+              <div class="col-6">
+                <div style="background: rgba(0,209,255,0.1); border: 1px solid rgba(0,209,255,0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                  <div style="font-size: 10px; font-weight: 600; color: #9aa8c2; margin-bottom: 8px;">🔵 N/B ZONE</div>
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
+                    <input type="checkbox" id="nbZoneCheck" style="width: 18px; height: 18px; cursor: pointer; accent-color: #00d1ff;">
+                    <span id="nbZoneText" style="font-size: 14px; font-weight: 700; color: #00d1ff;">-</span>
+                  </div>
+                  <span id="nbZoneBadge" class="badge bg-secondary" style="font-size: 9px; padding: 4px 8px;">대기</span>
+                </div>
+              </div>
+
+              <!-- ML TRUST 신호 -->
+              <div class="col-6">
+                <div style="background: rgba(255,183,3,0.1); border: 1px solid rgba(255,183,3,0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                  <div style="font-size: 10px; font-weight: 600; color: #9aa8c2; margin-bottom: 8px;">🤖 ML TRUST</div>
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
+                    <input type="checkbox" id="mlTrustCheck" style="width: 18px; height: 18px; cursor: pointer; accent-color: #ffb703;">
+                    <span id="mlTrustText" style="font-size: 14px; font-weight: 700; color: #ffb703;">-</span>
+                  </div>
+                  <span id="mlTrustBadge" class="badge bg-secondary" style="font-size: 9px; padding: 4px 8px;">대기</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 현재 상태 표시 -->
             <div class="row g-2">
               <div class="col-6">
-                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🗺️ N/B Zone</div>
                 <div id="ccNBZone" style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">-</div>
               </div>
               <div class="col-6">
-                <div style="font-size: 11px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">🤖 ML Trust</div>
                 <div id="ccMLTrust" style="background: rgba(14,20,36,0.8); border-radius: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #e6eefc; min-height: 30px;">-</div>
               </div>
             </div>

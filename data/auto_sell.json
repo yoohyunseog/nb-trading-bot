@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "market": "KRW-BTC",
+  "target_profit_rate": 1,
+  "sell_mode": "profit_first",
+  "sell_count": 1,
+  "cooldown_sec": 3600,
+  "zone_condition": true,
+  "ml_trust_adjust": false,
+  "last_check": null,
+  "last_sell": null
+}

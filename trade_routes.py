@@ -45,6 +45,7 @@ def register_trade_routes(app, env: Dict[str, Any]):
     Trader = env.get('Trader')
     TradeConfig = env.get('TradeConfig')
     AUTO_BUY_CONFIG = env.get('AUTO_BUY_CONFIG')
+    AUTO_SELL_CONFIG = env.get('AUTO_SELL_CONFIG')
 
     # ---- Auto-Buy ----
     @app.route('/api/auto-buy/config', methods=['GET', 'POST'])
@@ -107,6 +108,98 @@ def register_trade_routes(app, env: Dict[str, Any]):
                 'last_buy': AUTO_BUY_CONFIG.get('last_buy'),
                 'server_time': server_time,
                 'last_poll_ts': last_poll_ts,
+            })
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
+    # ---- Auto-Sell ----
+    @app.route('/api/auto-sell/config', methods=['GET', 'POST'])
+    def api_auto_sell_config():
+        """Get or update auto-sell configuration (persistent to file)."""
+        nonlocal AUTO_SELL_CONFIG
+        try:
+            if request.method == 'POST':
+                data = request.get_json(force=True) if request.is_json else {}
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        if k in AUTO_SELL_CONFIG:
+                            AUTO_SELL_CONFIG[k] = v
+                    
+                    # Save to file for persistence
+                    save_fn = env.get('save_auto_sell_config')
+                    if callable(save_fn):
+                        save_fn()
+                        logger.info(f"Auto-sell config updated and saved: enabled={AUTO_SELL_CONFIG.get('enabled')}")
+            return jsonify({'ok': True, 'config': AUTO_SELL_CONFIG})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
+    @app.route('/api/auto-sell/status', methods=['GET'])
+    def api_auto_sell_status():
+        """Return auto-sell status including eligible cards for selling."""
+        try:
+            enabled = bool(AUTO_SELL_CONFIG.get('enabled', False))
+            market = AUTO_SELL_CONFIG.get('market', 'KRW-BTC')
+            target_profit_rate = float(AUTO_SELL_CONFIG.get('target_profit_rate', 1.0))
+            sell_mode = AUTO_SELL_CONFIG.get('sell_mode', 'profit_first')
+            cooldown_sec = int(AUTO_SELL_CONFIG.get('cooldown_sec', 300))
+            last_sell = AUTO_SELL_CONFIG.get('last_sell')
+            server_time = int(time.time())
+            
+            # Check cooldown
+            can_sell = True
+            next_sell_time = 0
+            if last_sell:
+                elapsed = server_time - int(last_sell)
+                if elapsed < cooldown_sec:
+                    can_sell = False
+                    next_sell_time = int(last_sell) + cooldown_sec
+            
+            # Get eligible cards
+            eligible_cards = []
+            try:
+                _load_order_cards = env.get('_load_order_cards')
+                if callable(_load_order_cards):
+                    buy_cards = _load_order_cards('BUY')
+                    current_price = _get_current_btc_price() if callable(_get_current_btc_price) else 0
+                    
+                    if current_price > 0:
+                        for card in buy_cards:
+                            try:
+                                buy_price = float(card.get('price', 0))
+                                if buy_price > 0:
+                                    profit_rate = ((current_price - buy_price) / buy_price) * 100
+                                    if profit_rate >= target_profit_rate:
+                                        eligible_cards.append({
+                                            'card_id': card.get('uuid', ''),
+                                            'buy_price': buy_price,
+                                            'current_price': current_price,
+                                            'profit_rate': round(profit_rate, 2),
+                                            'size': float(card.get('size', 0))
+                                        })
+                            except Exception:
+                                continue
+                        
+                        # Sort by profit rate (highest first)
+                        if sell_mode == 'profit_first':
+                            eligible_cards.sort(key=lambda x: x['profit_rate'], reverse=True)
+            except Exception as e:
+                logger.warning(f"Auto-sell status: {e}")
+            
+            return jsonify({
+                'ok': True,
+                'enabled': enabled,
+                'market': market,
+                'target_profit_rate': target_profit_rate,
+                'sell_mode': sell_mode,
+                'cooldown_sec': cooldown_sec,
+                'last_sell': last_sell,
+                'server_time': server_time,
+                'can_sell': can_sell,
+                'next_sell_time': next_sell_time,
+                'eligible_count': len(eligible_cards),
+                # Return full eligible list so UI can display all candidates
+                'eligible_cards': eligible_cards
             })
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500
